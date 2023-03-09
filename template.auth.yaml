@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Auth Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+
+Resources:
+
+  AppUserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      UserPoolName: !Sub "AppUserPool-${AWS::Region}"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      Schema:
+        - Name: "email"
+          AttributeDataType: "String"
+          Mutable: true
+          Required: true
+        - Name: "given_name"
+          AttributeDataType: "String"
+          Mutable: true
+          Required: true
+        - Name: "family_name"
+          AttributeDataType: "String"
+          Mutable: true
+          Required: true
+      UsernameAttributes:
+        - "email"
+      AutoVerifiedAttributes:
+        - "email"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      VerificationMessageTemplate:
+        EmailSubject: "Verification Code"
+        EmailMessage: "Your verification code is {####}."
+
+  UserPoolIdParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "USER_POOL_ID"
+      Type: "String"
+      Value: !Ref AppUserPool
+
+Outputs:
+  AppUserPoolId:
+    Value: !Ref AppUserPool
+  AppUserPoolArn:
+    Value: !GetAtt AppUserPool.Arn

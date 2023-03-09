@@ -1,0 +1,13 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "aws-starter-project-backend"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1lamj1gdh5d3y"
+s3_prefix = "aws-starter-project-backend"
+region = "us-east-2"
+profile = "ianballard"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = "stage=\"development\" backupRegion=\"us-west-2\" dbTableName=\"DBTable\""
+image_repositories = []
+confirm_changeset = false

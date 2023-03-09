@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  DB Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+
+Resources:
+
+  DBTable:
+    Type: "AWS::DynamoDB::GlobalTable"
+    Properties:
+      TableName: !Ref dbTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: "NEW_AND_OLD_IMAGES"
+      Replicas:
+        - Region: !Ref AWS::Region
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+        - Region: !Ref backupRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+
+  TableParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "DB_TABLE"
+      Type: "String"
+      Value: !Ref DBTable
+
+Outputs:
+  TableArn:
+    Value: !GetAtt DBTable.Arn
+  TableStreamArn:
+    Value: !GetAtt DBTable.StreamArn

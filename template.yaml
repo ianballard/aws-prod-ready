@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Main Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+
+Resources:
+
+  CoreLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: core-library-layer
+      Description: Core library for project.
+      ContentUri: shared_layers/core_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  ApiLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: api-library-layer
+      Description: Api library for project.
+      ContentUri: api/layers/api_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  SSMParameterReadAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: ssm-parameter-read-access
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
+
+  UserApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.user.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        apiLayer: !Ref ApiLibraryLayer
+        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
+
+
+  DBStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.db.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        dbTableName: !Ref dbTableName
+
+  AuthStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
