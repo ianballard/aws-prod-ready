@@ -5,7 +5,6 @@
 codeuri = "/home/ian/workspace/personal/aws-starter-project-backend/api/user"
 runtime = "python3.9"
 architecture = "x86_64"
-handler = "user_controller.get"
 manifest_hash = ""
 packagetype = "Zip"
 functions = ["UserApiStack/GetUserFunction"]

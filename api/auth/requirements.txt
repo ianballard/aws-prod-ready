@@ -1,3 +1,2 @@
-aws-sam-cli==1.76.0
 PyJWT==2.6.0
 requests==2.25.1

@@ -13,8 +13,64 @@ Parameters:
   dbTableName:
     Description: "Table Name"
     Type: String
+  enableOpensearch:
+    Description: "Enable Opensearch"
+    Type: String
+    Default: "false"
+
+Conditions:
+  ShouldCreateOpenSearch: !Equals [!Ref enableOpensearch, "true"]
 
 Resources:
+
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: "default"
+
+  PrivateSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      VpcId: !Ref VPC
+
+  PrivateSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      VpcId: !Ref VPC
+
+  PrivateSubnet3:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [ 2, !GetAZs "" ]
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: "10.0.4.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+
+  SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "VPC Security Group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16
+          Description: Local HTTPS Traffic
 
   CoreLibraryLayer:
     Type: AWS::Serverless::LayerVersion
@@ -48,6 +104,17 @@ Resources:
               - ssm:GetParameter
             Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
 
+  VPCAdditionsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.vpc.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        vpcId: !Ref VPC
+        privateSubnet1: !Ref PrivateSubnet1
+        publicSubnet1: !Ref PublicSubnet1
+
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
@@ -58,7 +125,8 @@ Resources:
         coreLayer: !Ref CoreLibraryLayer
         apiLayer: !Ref ApiLibraryLayer
         ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
-
+        securityGroup: !Ref SecurityGroup
+        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
 
   DBStack:
     Type: "AWS::CloudFormation::Stack"
@@ -73,6 +141,15 @@ Resources:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       TemplateURL: template.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+
+  OpenSearchStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: ShouldCreateOpenSearch
+    Properties:
+      TemplateURL: template.opensearch.yaml
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion

@@ -35,6 +35,12 @@ Parameters:
   ssmReadAccessPolicy:
     Description: "Policy to get parameter values"
     Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
 
 Resources:
 
@@ -142,6 +148,11 @@ Resources:
       Handler: user_controller.get
       Policies:
         - !Ref ssmReadAccessPolicy
+        - AWSLambdaVPCAccessExecutionRole
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
       Events:
         ApiEvent:
           Type: Api

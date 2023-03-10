@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Open Search Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  enableOpensearch:
+    Description: "Enable Opensearch"
+    Type: String
+    Default: "true"
+  opensearchAdminUsername:
+    Description: "Opensearch IAM Admin Username"
+    Type: String
+    Default: "opensearch-admin"
+
+Conditions:
+  ShouldCreateOpenSearch: !Equals [!Ref enableOpensearch, "true"]
+
+Resources:
+
+  OpenSearchAdminUser:
+    Type: "AWS::IAM::User"
+    Properties:
+      UserName: !Ref opensearchAdminUsername
+
+  OpenSearchAdminAccessKey:
+    Type: "AWS::IAM::AccessKey"
+    Properties:
+      UserName: !Ref OpenSearchAdminUser
+
+  OpenSearchAdminUserPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "OpenSearchAdminPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "es:*"
+            Resource: "*"
+      Users:
+        - !Ref OpenSearchAdminUser
+
+  OpenSearchKmsKey:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "My KMS key for OpenSearch encryption"
+      KeyUsage: "ENCRYPT_DECRYPT"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2015-11-01"
+        Id: "key-default"
+        Statement:
+          - Sid: "Allow access for OpenSearch"
+            Effect: "Allow"
+            Principal:
+              Service: "es.amazonaws.com"
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
+
+  OpenSearchDomain:
+    Type: "AWS::OpenSearchService::Domain"
+    Condition: ShouldCreateOpenSearch
+    Properties:
+      OpenSearchVersion: "2.3"
+      OpenSearchClusterConfig:
+        InstanceType: "t3.small.search"
+        InstanceCount: 1
+        DedicatedMasterEnabled: false
+        ZoneAwarenessEnabled: false
+        ZoneAwarenessConfig:
+          AvailabilityZoneCount: 1
+      EncryptionAtRestOptions:
+        Enabled: true
+        KmsKeyId: !Ref OpenSearchKmsKey
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "es:*"
+            Resource: !Sub "arn:aws:es:*:${AWS::AccountId}:domain/*"
+      AdvancedSecurityOptions:
+        Enabled: true
+        SAMLOptions:
+          Enabled: false
+        MasterUserOptions:
+          MasterUserARN: !Ref OpenSearchAdminUser
+          MasterUserName: !Ref opensearchAdminUsername
+      LogPublishingOptions:
+        INDEX_SLOW_LOGS:
+          CloudWatchLogsLogGroupArn: !Ref LogGroupIndexSlow
+          Enabled: true
+        SEARCH_SLOW_LOGS:
+          CloudWatchLogsLogGroupArn: !Ref LogGroupSearchSlow
+          Enabled: true
+        AUDIT_LOGS:
+          CloudWatchLogsLogGroupArn: !Ref LogGroupAudit
+          Enabled: true
+        APPLICATION_LOGS:
+          CloudWatchLogsLogGroupArn: !Ref LogGroupApplication
+          Enabled: true
+
+  LogGroupIndexSlow:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  LogGroupSearchSlow:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  LogGroupAudit:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  LogGroupApplication:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+
+Outputs:
+  OpenSearchDomainArn:
+    Value: !GetAtt OpenSearchDomain.Arn
