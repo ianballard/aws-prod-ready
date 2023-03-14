@@ -14,71 +14,54 @@ Parameters:
     Description: "Enable Opensearch"
     Type: String
     Default: "true"
-  opensearchAdminUsername:
-    Description: "Opensearch IAM Admin Username"
-    Type: String
-    Default: "opensearch-admin"
 
 Conditions:
   ShouldCreateOpenSearch: !Equals [!Ref enableOpensearch, "true"]
 
 Resources:
 
-  OpenSearchAdminUser:
-    Type: "AWS::IAM::User"
-    Properties:
-      UserName: !Ref opensearchAdminUsername
-
-  OpenSearchAdminAccessKey:
-    Type: "AWS::IAM::AccessKey"
-    Properties:
-      UserName: !Ref OpenSearchAdminUser
-
-  OpenSearchAdminUserPolicy:
-    Type: "AWS::IAM::Policy"
-    Properties:
-      PolicyName: "OpenSearchAdminPolicy"
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action: "es:*"
-            Resource: "*"
-      Users:
-        - !Ref OpenSearchAdminUser
-
   OpenSearchKmsKey:
-    Type: "AWS::KMS::Key"
+    Type: 'AWS::KMS::Key'
     Properties:
-      Description: "My KMS key for OpenSearch encryption"
-      KeyUsage: "ENCRYPT_DECRYPT"
+      Description: KMS key for OpenSearch domain encryption
       EnableKeyRotation: true
       KeyPolicy:
-        Version: "2015-11-01"
-        Id: "key-default"
+        Version: '2012-10-17'
         Statement:
-          - Sid: "Allow access for OpenSearch"
-            Effect: "Allow"
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
             Principal:
-              Service: "es.amazonaws.com"
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow OpenSearch Service to Use the Key
+            Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
             Action:
-              - "kms:Encrypt"
-              - "kms:Decrypt"
-              - "kms:GenerateDataKey"
-            Resource: "*"
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: '*'
 
   OpenSearchDomain:
     Type: "AWS::OpenSearchService::Domain"
     Condition: ShouldCreateOpenSearch
     Properties:
-      OpenSearchVersion: "2.3"
-      OpenSearchClusterConfig:
+      EngineVersion: OpenSearch_2.3
+      ClusterConfig:
         InstanceType: "t3.small.search"
         InstanceCount: 1
         DedicatedMasterEnabled: false
-        ZoneAwarenessEnabled: false
-        ZoneAwarenessConfig:
-          AvailabilityZoneCount: 1
+#        ZoneAwarenessEnabled: true
+#        ZoneAwarenessConfig:
+#          AvailabilityZoneCount: 2
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: gp2
+        VolumeSize: 10
       EncryptionAtRestOptions:
         Enabled: true
         KmsKeyId: !Ref OpenSearchKmsKey
@@ -97,21 +80,24 @@ Resources:
         Enabled: true
         SAMLOptions:
           Enabled: false
+        InternalUserDatabaseEnabled: true
         MasterUserOptions:
-          MasterUserARN: !Ref OpenSearchAdminUser
-          MasterUserName: !Ref opensearchAdminUsername
+          MasterUserName: "{{resolve:secretsmanager:opensearch-secret:SecretString:username}}"
+          MasterUserPassword: "{{resolve:secretsmanager:opensearch-secret:SecretString:password}}"
+      DomainEndpointOptions:
+        EnforceHTTPS: true
       LogPublishingOptions:
         INDEX_SLOW_LOGS:
-          CloudWatchLogsLogGroupArn: !Ref LogGroupIndexSlow
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupIndexSlow.Arn
           Enabled: true
         SEARCH_SLOW_LOGS:
-          CloudWatchLogsLogGroupArn: !Ref LogGroupSearchSlow
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupSearchSlow.Arn
           Enabled: true
         AUDIT_LOGS:
-          CloudWatchLogsLogGroupArn: !Ref LogGroupAudit
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupAudit.Arn
           Enabled: true
-        APPLICATION_LOGS:
-          CloudWatchLogsLogGroupArn: !Ref LogGroupApplication
+        ES_APPLICATION_LOGS:
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupApplication.Arn
           Enabled: true
 
   LogGroupIndexSlow:
@@ -134,7 +120,34 @@ Resources:
     Properties:
       RetentionInDays: 365
 
+  OpenSearchLogsResourcePolicy:
+    Type: "AWS::Logs::ResourcePolicy"
+    Properties:
+      PolicyName: !Sub "OpenSearchLogsResourcePolicy-${AWS::Region}"
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowOpenSearchToCreateLogStreams",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "es.amazonaws.com"
+              },
+              "Action":[
+                "logs:PutLogEvents",
+                "logs:CreateLogStream"
+              ],
+              "Resource": [
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupIndexSlow}:*",
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupSearchSlow}:*",
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupAudit}:*",
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupApplication}:*"
+              ]
+            }
+          ]
+        }
 
 Outputs:
-  OpenSearchDomainArn:
-    Value: !GetAtt OpenSearchDomain.Arn
+  OpenSearchDomainEndpoint:
+    Value: !GetAtt OpenSearchDomain.DomainEndpoint

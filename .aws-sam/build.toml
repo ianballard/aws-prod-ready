@@ -5,8 +5,18 @@
 codeuri = "/home/ian/workspace/personal/aws-starter-project-backend/api/user"
 runtime = "python3.9"
 architecture = "x86_64"
+handler = ""
 manifest_hash = ""
 packagetype = "Zip"
 functions = ["UserApiStack/GetUserFunction"]
+
+[function_build_definitions.e84ea6ab-4b6b-4384-a019-c81c7f0b47df]
+codeuri = "/home/ian/workspace/personal/aws-starter-project-backend/api/auth"
+runtime = "python3.9"
+architecture = "x86_64"
+handler = "auth_controller.signup"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["AuthApiStack/SignUpFunction", "AuthApiStack/AuthenticateFunction"]
 
 [layer_build_definitions]

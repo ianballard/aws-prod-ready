@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  User API Stack
+  Auth API Stack
 
 Globals:
   Api:
@@ -106,7 +106,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: !Sub '${stage} USER APIGW'
+        Comment: !Sub '${stage} AUTH APIGW'
         DefaultCacheBehavior:
           AllowedMethods:
             - DELETE
@@ -141,14 +141,16 @@ Resources:
             Id: apigwOrigin
         PriceClass: PriceClass_100
 
-  GetUserFunction:
+  # TODO update policies
+  SignUpFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: api/user/
-      Handler: user_controller.get
+      CodeUri: api/auth/
+      Handler: auth_controller.signup
       Policies:
         - !Ref ssmReadAccessPolicy
         - AWSLambdaVPCAccessExecutionRole
+        - AmazonCognitoPowerUser
       VpcConfig:
         SecurityGroupIds:
           - !Ref securityGroup
@@ -158,19 +160,47 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGatewayApi
-            Path: /{version}/user
-            Method: get
+            Path: /{version}/signup
+            Method: post
+
+  # TODO update policies
+  AuthenticateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.authenticate
+      Policies:
+        - !Ref ssmReadAccessPolicy
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonCognitoPowerUser
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /{version}/auth
+            Method: post
 
 Outputs:
-  UserApiUrl:
+  AuthApiUrl:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
-  UserApiCloudFrontDistributionUrl:
+  AuthApiCloudFrontDistributionUrl:
     Value: !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ] ] ]
     Description: URL of the CloudFront distribution
-  GetUserFunctionArn:
-    Description: "Lambda Function ARN"
-    Value: !GetAtt GetUserFunction.Arn
-  GetUserFunctionIamRole:
-    Description: "Implicit IAM Role created for the function"
-    Value: !GetAtt GetUserFunctionRole.Arn
+  SignUpFunctionArn:
+    Description: "Sign Up Function ARN"
+    Value: !GetAtt SignUpFunction.Arn
+  SignUpFunctionIamRole:
+    Description: "Implicit IAM Role created for the sign up function"
+    Value: !GetAtt SignUpFunctionRole.Arn
+  AuthenticateFunctionArn:
+    Description: "Auth Function ARN"
+    Value: !GetAtt AuthenticateFunction.Arn
+  AuthenticateFunctionIamRole:
+    Description: "Implicit IAM Role created for the auth function"
+    Value: !GetAtt AuthenticateFunctionRole.Arn

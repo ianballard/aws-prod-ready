@@ -13,13 +13,6 @@ Parameters:
   dbTableName:
     Description: "Table Name"
     Type: String
-  enableOpensearch:
-    Description: "Enable Opensearch"
-    Type: String
-    Default: "false"
-
-Conditions:
-  ShouldCreateOpenSearch: !Equals [!Ref enableOpensearch, "true"]
 
 Resources:
 
@@ -115,6 +108,19 @@ Resources:
         privateSubnet1: !Ref PrivateSubnet1
         publicSubnet1: !Ref PublicSubnet1
 
+  AuthApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        apiLayer: !Ref ApiLibraryLayer
+        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
+        securityGroup: !Ref SecurityGroup
+        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
@@ -147,7 +153,6 @@ Resources:
 
   OpenSearchStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: ShouldCreateOpenSearch
     Properties:
       TemplateURL: template.opensearch.yaml
       Parameters:

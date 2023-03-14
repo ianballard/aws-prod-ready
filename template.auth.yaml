@@ -17,6 +17,7 @@ Resources:
     Type: "AWS::Cognito::UserPool"
     Properties:
       UserPoolName: !Sub "AppUserPool-${AWS::Region}"
+      DeletionProtection: ACTIVE
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -39,10 +40,6 @@ Resources:
           Required: true
       UsernameAttributes:
         - "email"
-      AutoVerifiedAttributes:
-        - "email"
-      AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
       VerificationMessageTemplate:
         EmailSubject: "Verification Code"
         EmailMessage: "Your verification code is {####}."
@@ -54,8 +51,49 @@ Resources:
       Type: "String"
       Value: !Ref AppUserPool
 
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref AppUserPool
+      ClientName: !Sub "UserPoolClient-${AWS::Region}"
+      GenerateSecret: true
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+
+  UserPoolClientParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "USER_POOL_CLIENT"
+      Type: "String"
+      Value: !Ref UserPoolClient
+
+  UserGroupUser:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: User
+      UserPoolId: !Ref AppUserPool
+
+  UserGroupAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admin
+      UserPoolId: !Ref AppUserPool
+
+  UserGroupSuperAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: SuperAdmin
+      UserPoolId: !Ref AppUserPool
+
 Outputs:
   AppUserPoolId:
     Value: !Ref AppUserPool
   AppUserPoolArn:
     Value: !GetAtt AppUserPool.Arn
+  UserPoolClient:
+    Value: !Ref UserPoolClient
