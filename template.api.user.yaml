@@ -18,6 +18,10 @@ Globals:
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref securityGroup
+      SubnetIds: !Ref vpcSubnetIds
 
 Parameters:
   stage:
@@ -124,6 +128,7 @@ Resources:
           ForwardedValues:
             Headers:
               - Authorization
+              - User-Agent
             QueryString: true
           TargetOriginId: apigwOrigin
           ViewerProtocolPolicy: redirect-to-https
@@ -147,18 +152,15 @@ Resources:
       CodeUri: api/user/
       Handler: user_controller.get
       Policies:
-        - !Ref ssmReadAccessPolicy
         - AWSLambdaVPCAccessExecutionRole
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref securityGroup
-        SubnetIds: !Ref vpcSubnetIds
+        - !Ref ssmReadAccessPolicy
+        - AmazonSQSFullAccess
       Events:
         ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGatewayApi
-            Path: /{version}/user
+            Path: /v1.0/user
             Method: get
 
 Outputs:

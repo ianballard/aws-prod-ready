@@ -1,5 +1,5 @@
-from core_lib.services.auth_service import sign_up, initiate_user_password_auth
-from api_lib.auth.authorization import authorize, Authorization, UserGroup, get_principle
+from core_lib.services.auth.auth_service import sign_up, initiate_user_password_auth
+from api_lib.auth.authorization import authorize, Authorization, UserGroup
 from core_lib.utils.lambda_util import lambda_handler
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse

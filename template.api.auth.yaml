@@ -18,6 +18,10 @@ Globals:
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref securityGroup
+      SubnetIds: !Ref vpcSubnetIds
 
 Parameters:
   stage:
@@ -124,6 +128,7 @@ Resources:
           ForwardedValues:
             Headers:
               - Authorization
+              - User-Agent
             QueryString: true
           TargetOriginId: apigwOrigin
           ViewerProtocolPolicy: redirect-to-https
@@ -148,19 +153,16 @@ Resources:
       CodeUri: api/auth/
       Handler: auth_controller.signup
       Policies:
-        - !Ref ssmReadAccessPolicy
         - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
         - AmazonCognitoPowerUser
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref securityGroup
-        SubnetIds: !Ref vpcSubnetIds
+        - AmazonSQSFullAccess
       Events:
         ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGatewayApi
-            Path: /{version}/signup
+            Path: /v1.0/signup
             Method: post
 
   # TODO update policies
@@ -170,19 +172,16 @@ Resources:
       CodeUri: api/auth/
       Handler: auth_controller.authenticate
       Policies:
-        - !Ref ssmReadAccessPolicy
         - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
         - AmazonCognitoPowerUser
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref securityGroup
-        SubnetIds: !Ref vpcSubnetIds
+        - AmazonSQSFullAccess
       Events:
         ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGatewayApi
-            Path: /{version}/auth
+            Path: /v1.0/auth
             Method: post
 
 Outputs:

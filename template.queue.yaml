@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  DB Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  ssmReadAccessPolicy:
+    Description: "Policy to get parameter values"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+
+Globals:
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+    Layers:
+      - !Ref coreLayer
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref securityGroup
+      SubnetIds: !Ref vpcSubnetIds
+
+Resources:
+
+  AccessLogQueueHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/log_event/app_access_log
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - SQSPollerPolicy:
+            QueueName: !GetAtt AccessLogQueue.QueueName
+      Handler: app_access_logger.log_access_event
+      Events:
+        AccessLogEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt AccessLogQueue.Arn
+            BatchSize: 10
+
+  AccessLogQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  AccessLogQueueURLParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "ACCESS_LOG_QUEUE_URL"
+      Type: "String"
+      Value: !GetAtt AccessLogQueue.QueueUrl
+
+  ErrorLogQueueHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/log_event/app_error_log
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ErrorLogQueue.QueueName
+      Handler: app_error_logger.log_error_event
+      Events:
+        ErrorLogEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ErrorLogQueue.Arn
+            BatchSize: 10
+
+  ErrorLogQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  ErrorLogQueueURLParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "ERROR_LOG_QUEUE_URL"
+      Type: "String"
+      Value: !GetAtt ErrorLogQueue.QueueUrl
+
+Outputs:
+  AccessLogQueueName:
+    Value: !GetAtt AccessLogQueue.QueueName
+  ErrorLogQueueName:
+    Value: !GetAtt ErrorLogQueue.QueueName

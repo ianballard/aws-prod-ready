@@ -142,6 +142,10 @@ Resources:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         dbTableName: !Ref dbTableName
+        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !Ref SecurityGroup
+        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
 
   AuthStack:
     Type: "AWS::CloudFormation::Stack"
@@ -158,3 +162,15 @@ Resources:
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
+
+  QueueStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.queue.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !Ref SecurityGroup
+        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
