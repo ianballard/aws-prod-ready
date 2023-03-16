@@ -8,7 +8,7 @@ architecture = "x86_64"
 handler = ""
 manifest_hash = ""
 packagetype = "Zip"
-functions = ["UserApiStack/GetUserFunction"]
+functions = ["UserApiStack/CreateUserFunction", "UserApiStack/QueryUserFunction", "UserApiStack/GetUserFunction", "UserApiStack/UpdateUserFunction", "UserApiStack/DeleteUserFunction"]
 
 [function_build_definitions.e84ea6ab-4b6b-4384-a019-c81c7f0b47df]
 codeuri = "/home/ian/workspace/personal/aws-starter-project-backend/api/auth"

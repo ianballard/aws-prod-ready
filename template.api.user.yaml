@@ -146,6 +146,42 @@ Resources:
             Id: apigwOrigin
         PriceClass: PriceClass_100
 
+  CreateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.put
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user
+            Method: put
+
+  QueryUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.get
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user
+            Method: get
+
   GetUserFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -155,13 +191,50 @@ Resources:
         - AWSLambdaVPCAccessExecutionRole
         - !Ref ssmReadAccessPolicy
         - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
       Events:
         ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGatewayApi
-            Path: /v1.0/user
+            Path: /v1.0/user/{id}
             Method: get
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.update
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user/{id}
+            Method: patch
+
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.delete
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user/{id}
+            Method: delete
 
 Outputs:
   UserApiUrl:
