@@ -1,0 +1,183 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Local Stack
+
+Globals:
+  Api:
+    Auth:
+      DefaultAuthorizer: "PUBLIC"
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+    Layers:
+      - !Ref CoreLibraryLayer
+      - !Ref ApiLibraryLayer
+      - !Ref LocalDependenciesLayer
+
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+
+Resources:
+
+  CoreLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: core-library-layer
+      Description: Core library for project.
+      ContentUri: shared_layers/core_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  ApiLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: api-library-layer
+      Description: Api library for project.
+      ContentUri: api/layers/api_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  LocalDependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: core-library-layer
+      Description: Core library for project.
+      ContentUri: local_layers/py_packages
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+
+  SignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.signup
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/signup
+            Method: post
+
+  AuthenticateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.authenticate
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/auth
+            Method: post
+
+  CreateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.put
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user
+            Method: put
+
+  QueryUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.query
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user
+            Method: get
+
+  GetUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.get
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user/{id}
+            Method: get
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.update
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - !Ref ssmReadAccessPolicy
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user/{id}
+            Method: patch
+
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.delete
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user/{id}
+            Method: delete
+

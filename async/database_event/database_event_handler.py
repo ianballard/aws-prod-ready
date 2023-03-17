@@ -15,9 +15,9 @@ def handle_db_event(event):
             old_image = dynamodb_json_to_json(db_event.get("OldImage", {}))
             new_image = dynamodb_json_to_json(db_event.get("NewImage", {}))
             entity_type = (
-                new_image.get("EntityType")
+                new_image.get("entity_type")
                 if event_name in ["INSERT", "MODIFY"]
-                else old_image.get("EntityType")
+                else old_image.get("entity_type")
             )
 
             if not entity_type:

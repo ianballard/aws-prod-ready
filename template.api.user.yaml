@@ -168,7 +168,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
-      Handler: user_controller.get
+      Handler: user_controller.query
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - !Ref ssmReadAccessPolicy

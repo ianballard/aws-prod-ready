@@ -13,12 +13,12 @@ profile=ianballard
 # todo: mfa or sso login here
 sam local start-api --port 2999 \
                     --template-file template.local.yaml \
-                    --env-vars ./config/template-config-$file_name.json \
                     --debug-port 5858 \
                     --skip-pull-image \
                     --debug \
                     --profile $profile \
-                    --warm-containers LAZY
+                    --warm-containers LAZY \
+                    --region us-east-2
 # LAZY will build the container when it's first called or after a change is detected. 
 # EAGER will build every container as soon as the command is run so your first boot will take several minutes.
 # One issue, if any container crashes in eager mode, Sam terminates all containers and closes, so 

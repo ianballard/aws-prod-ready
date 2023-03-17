@@ -65,9 +65,12 @@ Resources:
         - Region: !Ref AWS::Region
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
+          DeletionProtectionEnabled: true
         - Region: !Ref backupRegion
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
+          DeletionProtectionEnabled: true
+
 
   TableParameter:
     Type: "AWS::SSM::Parameter"

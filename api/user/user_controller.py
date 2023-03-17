@@ -1,15 +1,8 @@
 from api_lib.auth.authorization import authorize, Authorization, UserGroup
-from core_lib.utils.lambda_util import lambda_handler
-from core_lib.utils.thread_util import safe_get_thread_attribute
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
-from core_lib.services.database.database_service import (
-    get_item,
-    put_item,
-    query_items,
-    delete_item,
-    update_item,
-)
+from core_lib.data_models.user import user_data_access
+from core_lib.utils.lambda_util import lambda_handler
 
 
 @lambda_handler()
@@ -18,7 +11,9 @@ from core_lib.services.database.database_service import (
 def put(api_request: ApiRequest):
     item = api_request.body
     return ApiResponse(
-        api_request.headers, status_code=200, response_body=put_item(Item=item)
+        api_request.headers,
+        status_code=200,
+        response_body=user_data_access.create_user(item),
     ).format()
 
 
@@ -26,10 +21,10 @@ def put(api_request: ApiRequest):
 @api()
 @authorize(Authorization(user_group=UserGroup.User))
 def query(api_request: ApiRequest):
-    query_parameters = api_request.query_parameters
-    key = {"pk": query_parameters.get("pk"), "sk": query_parameters.get("sk")}
     return ApiResponse(
-        api_request.headers, status_code=200, response_body=query_items(Item=key)
+        api_request.headers,
+        status_code=200,
+        response_body=user_data_access.query_users(),
     ).format()
 
 
@@ -38,9 +33,10 @@ def query(api_request: ApiRequest):
 @authorize(Authorization(user_group=UserGroup.User))
 def get(api_request: ApiRequest):
     path_parameters = api_request.path_parameters
-    key = {"pk": "user", "sk": path_parameters.get("id")}
     return ApiResponse(
-        api_request.headers, status_code=200, response_body=get_item(Key=key)
+        api_request.headers,
+        status_code=200,
+        response_body=user_data_access.find_user_by_id(_id=path_parameters.get("id")),
     ).format()
 
 
@@ -49,17 +45,12 @@ def get(api_request: ApiRequest):
 @authorize(Authorization(user_group=UserGroup.User))
 def update(api_request: ApiRequest):
     path_parameters = api_request.path_parameters
-    key = {"pk": "user", "sk": path_parameters.get("id")}
-    update_expression = "set a=:v0, b=:v1"
-    expression_attribute_values = {":v0": "test1", ":v1": "test2"}
+    updates = api_request.body
     return ApiResponse(
         api_request.headers,
         status_code=200,
-        response_body=update_item(
-            Key=key,
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_attribute_values,
-            ReturnValues="ALL_NEW",
+        response_body=user_data_access.update_user(
+            _id=path_parameters.get("id"), updates=updates
         ),
     ).format()
 
@@ -69,8 +60,8 @@ def update(api_request: ApiRequest):
 @authorize(Authorization(user_group=UserGroup.User))
 def delete(api_request: ApiRequest):
     path_parameters = api_request.path_parameters
-    key = {"pk": "user", "sk": path_parameters.get("id")}
-
     return ApiResponse(
-        api_request.headers, status_code=200, response_body=delete_item(Key=key)
+        api_request.headers,
+        status_code=200,
+        response_body=user_data_access.delete_user_by_id(path_parameters.get("id")),
     ).format()
