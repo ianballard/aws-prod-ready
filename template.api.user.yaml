@@ -18,10 +18,12 @@ Globals:
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
-    VpcConfig:
-      SecurityGroupIds:
-        - !Ref securityGroup
-      SubnetIds: !Ref vpcSubnetIds
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
 
 Parameters:
   stage:
@@ -36,15 +38,24 @@ Parameters:
   apiLayer:
     Description: "API Library Layer"
     Type: String
-  ssmReadAccessPolicy:
-    Description: "Policy to get parameter values"
-    Type: String
   securityGroup:
     Description: "Lambda VPC security group"
     Type: String
+    Default: ""
   vpcSubnetIds:
     Description: "Lambda VPC Subnets"
     Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
 
 Resources:
 
@@ -153,7 +164,7 @@ Resources:
       Handler: user_controller.put
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
       Events:
@@ -171,7 +182,7 @@ Resources:
       Handler: user_controller.query
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
       Events:
@@ -189,7 +200,7 @@ Resources:
       Handler: user_controller.get
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
       Events:
@@ -207,7 +218,7 @@ Resources:
       Handler: user_controller.update
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
       Events:
@@ -225,7 +236,7 @@ Resources:
       Handler: user_controller.delete
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
       Events:

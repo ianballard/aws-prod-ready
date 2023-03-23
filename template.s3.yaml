@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Primary S3 Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+    Default: "t52x7zk6ls6p"
+  enableS3Replication:
+    Description: "Is s3 replication enabled (true|false) NOTE: buckets must exist"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
+
+Resources:
+
+  S3ReplicationRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 's3.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'PrimaryAccessLogS3ReplicationPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - 's3:GetReplicationConfiguration'
+                  - 's3:ListBucket'
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - 's3:GetObjectVersion'
+                  - 's3:GetObjectVersionAcl'
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - 's3:ReplicateObject'
+                  - 's3:ReplicateDelete'
+                  - 's3:ObjectOwnerOverrideToBucketOwner'
+                Effect: Allow
+                Resource: '*'
+
+  # Use this definition for no replication
+#  AccessLogBucket:
+#    Type: 'AWS::S3::Bucket'
+#    DeletionPolicy: Retain
+#    Properties:
+#      BucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+#      BucketEncryption:
+#        ServerSideEncryptionConfiguration:
+#          - ServerSideEncryptionByDefault:
+#              KMSMasterKeyID: 'alias/aws/s3'
+#              SSEAlgorithm: 'aws:kms'
+#      VersioningConfiguration:
+#        Status: Enabled
+
+# Use this definition for replication
+  AccessLogBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration: !If
+        - isS3ReplicationEnabled
+        - Role: !GetAtt S3ReplicationRole.Arn
+          Rules:
+            - Id: 'PrimaryAccessLogsToSecondaryAccessLogsReplication'
+              Status: Enabled
+              Destination:
+                Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-access-log-bucket", !Sub "arn:aws:s3:::${appId}-${stage}-primary-access-log-bucket" ]
+                StorageClass: STANDARD
+              Prefix: ''
+        - !Ref AWS::NoValue
+
+  # Use this definition for no replication
+#  AppStorage:
+#    Type: 'AWS::S3::Bucket'
+#    DeletionPolicy: Retain
+#    Properties:
+#      BucketName: !Sub "${appId}-${stage}-${stackType}-app-storage"
+#      BucketEncryption:
+#        ServerSideEncryptionConfiguration:
+#          - ServerSideEncryptionByDefault:
+#              KMSMasterKeyID: 'alias/aws/s3'
+#              SSEAlgorithm: 'aws:kms'
+#      VersioningConfiguration:
+#        Status: Enabled
+#      LoggingConfiguration:
+#        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+#        LogFilePrefix: 'app-storage-access-logs/'
+
+# Use this definition for replication
+  AppStorage:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${appId}-${stage}-${stackType}-app-storage"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'app-bucket-access-logs/'
+      ReplicationConfiguration: !If
+        - isS3ReplicationEnabled
+        - Role: !GetAtt S3ReplicationRole.Arn
+          Rules:
+            - Id: 'PrimaryAppStorageToSecondaryAppStorageReplication'
+              Status: Enabled
+              Destination:
+                Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-app-storage", !Sub "arn:aws:s3:::${appId}-${stage}-primary-app-storage" ]
+                StorageClass: STANDARD
+              Prefix: ''
+        - !Ref AWS::NoValue
+
+Outputs:
+  S3ReplicationRoleArn:
+    Value: !GetAtt S3ReplicationRole.Arn
+  PrimaryAccessLogBucketName:
+    Value: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+  PrimaryAppStorageBucketName:
+    Value: !Sub "${appId}-${stage}-${stackType}-app-storage"
+

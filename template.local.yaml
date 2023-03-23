@@ -154,7 +154,7 @@ Resources:
       Handler: user_controller.update
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
       Events:

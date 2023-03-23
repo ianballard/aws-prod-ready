@@ -18,10 +18,13 @@ Globals:
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
-    VpcConfig:
-      SecurityGroupIds:
-        - !Ref securityGroup
-      SubnetIds: !Ref vpcSubnetIds
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
 
 Parameters:
   stage:
@@ -36,15 +39,24 @@ Parameters:
   apiLayer:
     Description: "API Library Layer"
     Type: String
-  ssmReadAccessPolicy:
-    Description: "Policy to get parameter values"
-    Type: String
   securityGroup:
     Description: "Lambda VPC security group"
     Type: String
+    Default: ""
   vpcSubnetIds:
     Description: "Lambda VPC Subnets"
     Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
 
 Resources:
 
@@ -154,7 +166,7 @@ Resources:
       Handler: auth_controller.signup
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
       Events:
@@ -173,7 +185,7 @@ Resources:
       Handler: auth_controller.authenticate
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
       Events:

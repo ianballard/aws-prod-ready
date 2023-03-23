@@ -13,54 +13,49 @@ Parameters:
   dbTableName:
     Description: "Table Name"
     Type: String
-  coreLayer:
-    Description: "Core Library Layer"
-    Type: String
-  securityGroup:
-    Description: "Lambda VPC security group"
-    Type: String
-  vpcSubnetIds:
-    Description: "Lambda VPC Subnets"
-    Type: CommaDelimitedList
-  ssmReadAccessPolicy:
-    Description: "Policy to get parameter values"
-    Type: String
-
-Globals:
-  Function:
-    MemorySize: 256
-    Timeout: 30
-    Runtime: python3.9
-    Environment:
-      Variables:
-        "stage": !Ref "stage"
-        "region": !Ref AWS::Region
-    Layers:
-      - !Ref coreLayer
-    VpcConfig:
-      SecurityGroupIds:
-        - !Ref securityGroup
-      SubnetIds: !Ref vpcSubnetIds
 
 Resources:
 
   DBTable:
-    Type: "AWS::DynamoDB::GlobalTable"
+    Type: AWS::DynamoDB::GlobalTable
     Properties:
       TableName: !Ref dbTableName
-      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
         - AttributeName: sk
+          AttributeType: S
+        - AttributeName: lsi1_sk
+          AttributeType: S
+        - AttributeName: lsi2_sk
           AttributeType: S
       KeySchema:
         - AttributeName: pk
           KeyType: HASH
         - AttributeName: sk
           KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      LocalSecondaryIndexes:
+        - IndexName: lsi1
+          KeySchema:
+            - AttributeName: pk
+              KeyType: HASH
+            - AttributeName: lsi1_sk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: lsi2
+          KeySchema:
+            - AttributeName: pk
+              KeyType: HASH
+            - AttributeName: lsi2_sk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       StreamSpecification:
-        StreamViewType: "NEW_AND_OLD_IMAGES"
+        StreamViewType: NEW_AND_OLD_IMAGES
+      SSESpecification:
+        SSEEnabled: true
       Replicas:
         - Region: !Ref AWS::Region
           PointInTimeRecoverySpecification:
@@ -71,36 +66,12 @@ Resources:
             PointInTimeRecoveryEnabled: true
           DeletionProtectionEnabled: true
 
-
   TableParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
       Name: "DB_TABLE"
       Type: "String"
       Value: !Ref DBTable
-
-  DBStream:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: ./async/database_event
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AWSLambdaDynamoDBExecutionRole
-        - AmazonESFullAccess
-        - !Ref ssmReadAccessPolicy
-        - AmazonDynamoDBFullAccess
-        - AmazonSQSFullAccess
-      Handler: database_event_handler.handle_db_event
-      Timeout: 900
-      Events:
-        DBStreamEvent:
-          Type: DynamoDB
-          Properties:
-            Stream: !GetAtt DBTable.StreamArn
-            StartingPosition: LATEST
-            BatchSize: 5
-            MaximumBatchingWindowInSeconds: 5
-            Enabled: true
 
 
 Outputs:

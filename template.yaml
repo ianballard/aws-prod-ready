@@ -10,60 +10,98 @@ Parameters:
   backupRegion:
     Description: "Backup Region"
     Type: String
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+    Default: "abc123abc123"
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
   dbTableName:
     Description: "Table Name"
     Type: String
+    Default: "DBTable"
+  enableVPC:
+    Description: "Enable VPC (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  enableOpenSearch:
+    Description: "Enable Open Search (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  enableS3Replication:
+    Description: "Is s3 replication enabled (true|false) NOTE: buckets must exist"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  enableAWSAuth:
+    Description: "Is aws auth (cognito) enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isAWSAuthEnabled: !Equals [ !Ref enableAWSAuth, 'true' ]
+  isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isVPCDisabled: !Equals [ !Ref enableVPC, 'false' ]
+  isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
 
 Resources:
 
-  VPC:
-    Type: "AWS::EC2::VPC"
+  DynamoDBStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isPrimary
     Properties:
-      CidrBlock: "10.0.0.0/16"
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      InstanceTenancy: "default"
+      TemplateURL: template.db.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        dbTableName: !Ref dbTableName
 
-  PrivateSubnet1:
-    Type: "AWS::EC2::Subnet"
+  AuthStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isAWSAuthEnabled
     Properties:
-      CidrBlock: "10.0.1.0/24"
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]
-      VpcId: !Ref VPC
+      TemplateURL: template.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
 
-  PrivateSubnet2:
-    Type: "AWS::EC2::Subnet"
+  OpenSearchStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isOpenSearchEnabled
     Properties:
-      CidrBlock: "10.0.2.0/24"
-      AvailabilityZone: !Select [ 1, !GetAZs "" ]
-      VpcId: !Ref VPC
+      TemplateURL: template.opensearch.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
 
-  PrivateSubnet3:
-    Type: "AWS::EC2::Subnet"
+  S3Stack:
+    Type: "AWS::CloudFormation::Stack"
     Properties:
-      CidrBlock: "10.0.3.0/24"
-      AvailabilityZone: !Select [ 2, !GetAZs "" ]
-      VpcId: !Ref VPC
-
-  PublicSubnet1:
-    Type: "AWS::EC2::Subnet"
-    Properties:
-      CidrBlock: "10.0.4.0/24"
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]
-      VpcId: !Ref VPC
-      MapPublicIpOnLaunch: true
-
-  SecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      GroupDescription: "VPC Security Group"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 10.0.0.0/16
-          Description: Local HTTPS Traffic
+      TemplateURL: template.s3.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        stackType: !Ref stackType
+        appId: !Ref appId
+        enableS3Replication: !Ref enableS3Replication
 
   CoreLibraryLayer:
     Type: AWS::Serverless::LayerVersion
@@ -85,92 +123,28 @@ Resources:
         - python3.9
       RetentionPolicy: Delete
 
-  SSMParameterReadAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: ssm-parameter-read-access
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - ssm:GetParameter
-            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
-
-  VPCAdditionsStack:
+  VPCStack:
     Type: "AWS::CloudFormation::Stack"
+    Condition: isVPCEnabled
     Properties:
       TemplateURL: template.vpc.yaml
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
-        vpcId: !Ref VPC
-        privateSubnet1: !Ref PrivateSubnet1
-        publicSubnet1: !Ref PublicSubnet1
+        coreLayer: !Ref CoreLibraryLayer
+        apiLayer: !Ref ApiLibraryLayer
+        stackType: !Ref stackType
+        dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
 
-  AuthApiStack:
+  NonVPCStack:
     Type: "AWS::CloudFormation::Stack"
+    Condition: isVPCDisabled
     Properties:
-      TemplateURL: template.api.auth.yaml
+      TemplateURL: template.non-vpc.yaml
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         coreLayer: !Ref CoreLibraryLayer
         apiLayer: !Ref ApiLibraryLayer
-        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
-        securityGroup: !Ref SecurityGroup
-        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
-
-  UserApiStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.api.user.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-        coreLayer: !Ref CoreLibraryLayer
-        apiLayer: !Ref ApiLibraryLayer
-        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
-        securityGroup: !Ref SecurityGroup
-        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
-
-  DBStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.db.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-        dbTableName: !Ref dbTableName
-        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
-        coreLayer: !Ref CoreLibraryLayer
-        securityGroup: !Ref SecurityGroup
-        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
-
-  AuthStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.auth.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-
-  OpenSearchStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.opensearch.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-
-  QueueStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.queue.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-        coreLayer: !Ref CoreLibraryLayer
-        securityGroup: !Ref SecurityGroup
-        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
-        ssmReadAccessPolicy: !Ref SSMParameterReadAccessPolicy
+        stackType: !Ref stackType
+        dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]

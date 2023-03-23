@@ -13,15 +13,24 @@ Parameters:
   coreLayer:
     Description: "Core Library Layer"
     Type: String
-  ssmReadAccessPolicy:
-    Description: "Policy to get parameter values"
-    Type: String
   securityGroup:
     Description: "Lambda VPC security group"
     Type: String
+    Default: ""
   vpcSubnetIds:
     Description: "Lambda VPC Subnets"
     Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
 
 Globals:
   Function:
@@ -34,10 +43,12 @@ Globals:
         "region": !Ref AWS::Region
     Layers:
       - !Ref coreLayer
-    VpcConfig:
-      SecurityGroupIds:
-        - !Ref securityGroup
-      SubnetIds: !Ref vpcSubnetIds
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
 
 Resources:
 
@@ -47,7 +58,7 @@ Resources:
       CodeUri: ./async/log_event/app_access_log
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - SQSPollerPolicy:
             QueueName: !GetAtt AccessLogQueue.QueueName
       Handler: app_access_logger.log_access_event
@@ -76,7 +87,7 @@ Resources:
       CodeUri: ./async/log_event/app_error_log
       Policies:
         - AWSLambdaVPCAccessExecutionRole
-        - !Ref ssmReadAccessPolicy
+        - AmazonSSMReadOnlyAccess
         - SQSPollerPolicy:
             QueueName: !GetAtt ErrorLogQueue.QueueName
       Handler: app_error_logger.log_error_event

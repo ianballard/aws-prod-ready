@@ -10,108 +10,123 @@ Parameters:
   backupRegion:
     Description: "Backup Region"
     Type: String
-  vpcId:
-    Description: "VPC ID"
+  coreLayer:
+    Description: "Core Library Layer"
     Type: String
-  privateSubnet1:
-    Description: "Private Subnet 1"
+  apiLayer:
+    Description: "API Library Layer"
     Type: String
-  publicSubnet1:
-    Description: "Public Subnet 1"
+  stackType:
+    Description: "(primary|secondary)"
     Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  dbStreamArn:
+    Description: "DB Stream ARN"
+    Type: String
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+
 
 Resources:
 
-  PrivateSubnetNATRouteTable:
-    Type: AWS::EC2::RouteTable
+  VPC:
+    Type: "AWS::EC2::VPC"
     Properties:
-      VpcId: !Ref vpcId
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: "default"
 
-  PrivateSubnet1NATRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+  PrivateSubnet1:
+    Type: "AWS::EC2::Subnet"
     Properties:
-      SubnetId: !Ref privateSubnet1
-      RouteTableId: !Ref PrivateSubnetNATRouteTable
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      VpcId: !Ref VPC
 
-  PublicSubnetIGWRouteTable:
-    Type: AWS::EC2::RouteTable
+  PublicSubnet1:
+    Type: "AWS::EC2::Subnet"
     Properties:
-      VpcId: !Ref vpcId
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
 
-  PublicSubnet1IGWRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+  SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
     Properties:
-      SubnetId: !Ref publicSubnet1
-      RouteTableId: !Ref PublicSubnetIGWRouteTable
+      GroupDescription: "VPC Security Group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16
+          Description: Local HTTPS Traffic
 
-  EIP:
-    Type: AWS::EC2::EIP
+  VPCRoutingStack:
+    Type: "AWS::CloudFormation::Stack"
     Properties:
-      Domain: vpc
+      TemplateURL: template.vpc.routing.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        vpcId: !Ref VPC
+        privateSubnet1: !Ref PrivateSubnet1
+        publicSubnet1: !Ref PublicSubnet1
 
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt EIP.AllocationId
-      SubnetId: !Ref publicSubnet1
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-
-  VPCGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref vpcId
-      InternetGatewayId: !Ref InternetGateway
-
-  IGWPublicRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicSubnetIGWRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  NATPublicRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateSubnetNATRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
-
-
-#
-#  FlowLogRole:
-#    Type: "AWS::IAM::Role"
+#  DBEventStack:
+#    Type: "AWS::CloudFormation::Stack"
+#    Condition: isPrimary
 #    Properties:
-#      AssumeRolePolicyDocument:
-#        Version: "2012-10-17"
-#        Statement:
-#          - Effect: "Allow"
-#            Principal:
-#              Service: "vpc-flow-logs.amazonaws.com"
-#            Action: "sts:AssumeRole"
-#      Policies:
-#        - PolicyName: "AllowCloudWatchLogs"
-#          PolicyDocument:
-#            Version: "2012-10-17"
-#            Statement:
-#              - Effect: "Allow"
-#                Action:
-#                  - "logs:CreateLogGroup"
-#                  - "logs:CreateLogStream"
-#                  - "logs:PutLogEvents"
-#                Resource: "arn:aws:logs:*:*:*"
+#      TemplateURL: template.db.event.yaml
+#      Parameters:
+#        stage: !Ref stage
+#        backupRegion: !Ref backupRegion
+#        coreLayer: !Ref coreLayer
+#        securityGroup: !Ref SecurityGroup
+#        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+#        enableVPC: true
+#        dbStreamArn: !Ref dbStreamArn
 #
-#  FlowLog:
-#    Type: "AWS::EC2::FlowLog"
+#  QueueStack:
+#    Type: "AWS::CloudFormation::Stack"
 #    Properties:
-#      DeliverLogsPermissionArn: !GetAtt FlowLogRole.Arn
-#      ResourceId: !Ref vpcId
-#      ResourceType: "VPC"
-#      TrafficType: "ALL"
-#      LogGroupName: !Ref VPCFlowLogGroup
-
-  VPCFlowLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 365
+#      TemplateURL: template.queue.yaml
+#      Parameters:
+#        stage: !Ref stage
+#        backupRegion: !Ref backupRegion
+#        coreLayer: !Ref coreLayer
+#        securityGroup: !Ref SecurityGroup
+#        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+#        enableVPC: true
+#
+#  AuthApiStack:
+#    Type: "AWS::CloudFormation::Stack"
+#    Properties:
+#      TemplateURL: template.api.auth.yaml
+#      Parameters:
+#        stage: !Ref stage
+#        backupRegion: !Ref backupRegion
+#        coreLayer: !Ref coreLayer
+#        apiLayer: !Ref apiLayer
+#        securityGroup: !Ref SecurityGroup
+#        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+#        enableVPC: true
+#
+#  UserApiStack:
+#    Type: "AWS::CloudFormation::Stack"
+#    Properties:
+#      TemplateURL: template.api.user.yaml
+#      Parameters:
+#        stage: !Ref stage
+#        backupRegion: !Ref backupRegion
+#        coreLayer: !Ref coreLayer
+#        apiLayer: !Ref apiLayer
+#        securityGroup: !Ref SecurityGroup
+#        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+#        enableVPC: true
