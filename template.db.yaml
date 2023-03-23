@@ -66,14 +66,6 @@ Resources:
             PointInTimeRecoveryEnabled: true
           DeletionProtectionEnabled: true
 
-  TableParameter:
-    Type: "AWS::SSM::Parameter"
-    Properties:
-      Name: "DB_TABLE"
-      Type: "String"
-      Value: !Ref DBTable
-
-
 Outputs:
   TableArn:
     Value: !GetAtt DBTable.Arn

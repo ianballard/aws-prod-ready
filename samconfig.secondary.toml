@@ -10,5 +10,5 @@ profile = "ianballard"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 image_repositories = []
 confirm_changeset = false
-parameter_overrides = "stage=\"development\" backupRegion=\"us-east-2\" dbTableName=\"DBTable\" stackType=\"secondary\" appId=\"t52x7zk6ls6p\" enableS3Replication=\"true\" enableVPC=\"true\""
+parameter_overrides = "stage=\"development\" backupRegion=\"us-east-2\" dbTableName=\"DBTable\" stackType=\"secondary\" appId=\"t52x7zk6ls6p\" enableS3Replication=\"true\" enableVPC=\"false\""
 

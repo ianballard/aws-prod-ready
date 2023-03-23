@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  DB Stack
+  Queue Stack
 
 Parameters:
   stage:
@@ -28,6 +28,10 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -41,6 +45,7 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
+        "ERROR_LOG_QUEUE_URL": !GetAtt ErrorLogQueue.QueueUrl
     Layers:
       - !Ref coreLayer
     VpcConfig: !If
@@ -74,13 +79,6 @@ Resources:
     Properties:
       VisibilityTimeout: 60
 
-  AccessLogQueueURLParameter:
-    Type: "AWS::SSM::Parameter"
-    Properties:
-      Name: "ACCESS_LOG_QUEUE_URL"
-      Type: "String"
-      Value: !GetAtt AccessLogQueue.QueueUrl
-
   ErrorLogQueueHandler:
     Type: AWS::Serverless::Function
     Properties:
@@ -103,15 +101,12 @@ Resources:
     Properties:
       VisibilityTimeout: 60
 
-  ErrorLogQueueURLParameter:
-    Type: "AWS::SSM::Parameter"
-    Properties:
-      Name: "ERROR_LOG_QUEUE_URL"
-      Type: "String"
-      Value: !GetAtt ErrorLogQueue.QueueUrl
-
 Outputs:
   AccessLogQueueName:
     Value: !GetAtt AccessLogQueue.QueueName
   ErrorLogQueueName:
     Value: !GetAtt ErrorLogQueue.QueueName
+  AccessLogQueueUrl:
+    Value: !GetAtt AccessLogQueue.QueueUrl
+  ErrorLogQueueUrl:
+    Value: !GetAtt ErrorLogQueue.QueueUrl

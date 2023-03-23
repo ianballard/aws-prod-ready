@@ -21,16 +21,24 @@ Parameters:
       - 'primary'
       - 'secondary'
     Default: 'primary'
+  enablePersistentStorage:
+    Description: "Enable Persistent Storage (true|false) true for long lived environments (dev, release, prod)  and false for ephemeral environments"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
   dbTableName:
     Description: "Table Name"
     Type: String
     Default: "DBTable"
   enableVPC:
-    Description: "Enable VPC (true|false)"
+    Description: "Enable VPC (true|false|null)"
     Type: String
     AllowedValues:
       - 'true'
       - 'false'
+      - 'null'
     Default: 'false'
   enableOpenSearch:
     Description: "Enable Open Search (true|false)"
@@ -61,12 +69,22 @@ Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
   isVPCDisabled: !Equals [ !Ref enableVPC, 'false' ]
   isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
+  isPersistentStorageEnabled: !Equals [ !Ref enablePersistentStorage, 'true' ]
+  isPrimaryAndStorageEnabled: !And
+    - !Condition isPrimary
+    - !Condition isPersistentStorageEnabled
+  isAWSAuthAndStorageEnabled: !And
+    - !Condition isAWSAuthEnabled
+    - !Condition isPersistentStorageEnabled
+  isOpenSearchAndStorageEnabled: !And
+    - !Condition isOpenSearchEnabled
+    - !Condition isPersistentStorageEnabled
 
 Resources:
 
   DynamoDBStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isPrimary
+    Condition: isPrimaryAndStorageEnabled
     Properties:
       TemplateURL: template.db.yaml
       Parameters:
@@ -76,7 +94,7 @@ Resources:
 
   AuthStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isAWSAuthEnabled
+    Condition: isAWSAuthAndStorageEnabled
     Properties:
       TemplateURL: template.auth.yaml
       Parameters:
@@ -85,7 +103,7 @@ Resources:
 
   OpenSearchStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isOpenSearchEnabled
+    Condition: isOpenSearchAndStorageEnabled
     Properties:
       TemplateURL: template.opensearch.yaml
       Parameters:
@@ -94,6 +112,7 @@ Resources:
 
   S3Stack:
     Type: "AWS::CloudFormation::Stack"
+    Condition: isPersistentStorageEnabled
     Properties:
       TemplateURL: template.s3.yaml
       Parameters:
@@ -135,6 +154,7 @@ Resources:
         apiLayer: !Ref ApiLibraryLayer
         stackType: !Ref stackType
         dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+        dbTableName: !Ref dbTableName
 
   NonVPCStack:
     Type: "AWS::CloudFormation::Stack"
@@ -148,3 +168,4 @@ Resources:
         apiLayer: !Ref ApiLibraryLayer
         stackType: !Ref stackType
         dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+        dbTableName: !Ref dbTableName

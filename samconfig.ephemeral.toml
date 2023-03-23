@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1lamj1gdh5d3y"
+region = "us-east-2"
+profile = "ianballard"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+image_repositories = []
+confirm_changeset = false
+parameter_overrides = "stage=\"pre-development\" backupRegion=\"us-west-2\" dbTableName=\"DBTable\" enableVPC=\"false\" enablePersistentStorage=\"false\""

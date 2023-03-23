@@ -15,6 +15,7 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
+        "DB_TABLE": "DBTable"
     Layers:
       - !Ref CoreLibraryLayer
       - !Ref ApiLibraryLayer

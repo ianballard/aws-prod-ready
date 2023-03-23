@@ -26,6 +26,10 @@ Parameters:
   dbStreamArn:
     Description: "DB Stream ARN"
     Type: String
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
@@ -64,6 +68,9 @@ Resources:
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         enableVPC: false
+        dbTableName: !Ref dbTableName
+        accessLogQueueUrl: !GetAtt QueueStack.Outputs.AccessLogQueueUrl
+        errorLogQueueUrl: !GetAtt QueueStack.Outputs.ErrorLogQueueUrl
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -75,3 +82,6 @@ Resources:
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         enableVPC: false
+        dbTableName: !Ref dbTableName
+        accessLogQueueUrl: !GetAtt QueueStack.Outputs.AccessLogQueueUrl
+        errorLogQueueUrl: !GetAtt QueueStack.Outputs.ErrorLogQueueUrl
