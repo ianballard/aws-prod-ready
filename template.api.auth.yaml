@@ -15,9 +15,9 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
+        "BACKUP_REGION": !Ref backupRegion
         "DB_TABLE": !Ref dbTableName
-        "ACCESS_LOG_QUEUE_URL": !Ref accessLogQueueUrl
-        "ERROR_LOG_QUEUE_URL": !Ref errorLogQueueUrl
+        "VPC_ENABLED": !Ref enableVPC
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
@@ -61,12 +61,6 @@ Parameters:
     Description: "Table Name"
     Type: String
     Default: "DBTable"
-  accessLogQueueUrl:
-    Description: "Access Log Queue Url"
-    Type: String
-  errorLogQueueUrl:
-    Description: "Error Log Queue Url"
-    Type: String
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -182,6 +176,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
       Events:
         ApiEvent:
           Type: Api
@@ -208,6 +203,24 @@ Resources:
             RestApiId: !Ref ApiGatewayApi
             Path: /v1.0/auth
             Method: post
+
+  ConfirmSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.confirm_sign_up
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/confirm_sign_up
+            Method: get
 
 Outputs:
   AuthApiUrl:

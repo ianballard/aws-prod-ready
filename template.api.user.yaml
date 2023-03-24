@@ -16,8 +16,8 @@ Globals:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
         "DB_TABLE": !Ref dbTableName
-        "ACCESS_LOG_QUEUE_URL": !Ref accessLogQueueUrl
-        "ERROR_LOG_QUEUE_URL": !Ref errorLogQueueUrl
+        "BACKUP_REGION": !Ref backupRegion
+        "VPC_ENABLED": !Ref enableVPC
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
@@ -60,12 +60,6 @@ Parameters:
     Description: "Table Name"
     Type: String
     Default: "DBTable"
-  accessLogQueueUrl:
-    Description: "Access Log Queue Url"
-    Type: String
-  errorLogQueueUrl:
-    Description: "Error Log Queue Url"
-    Type: String
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -180,6 +174,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
+        - AmazonCognitoPowerUser
       Events:
         ApiEvent:
           Type: Api

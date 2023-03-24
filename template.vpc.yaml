@@ -201,8 +201,6 @@ Resources:
         vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
         enableVPC: true
         dbTableName: !Ref dbTableName
-        accessLogQueueUrl: !GetAtt QueueStack.Outputs.AccessLogQueueUrl
-        errorLogQueueUrl: !GetAtt QueueStack.Outputs.ErrorLogQueueUrl
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -217,5 +215,3 @@ Resources:
         vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
         enableVPC: true
         dbTableName: !Ref dbTableName
-        accessLogQueueUrl: !GetAtt QueueStack.Outputs.AccessLogQueueUrl
-        errorLogQueueUrl: !GetAtt QueueStack.Outputs.ErrorLogQueueUrl

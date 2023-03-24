@@ -69,8 +69,6 @@ Resources:
         apiLayer: !Ref apiLayer
         enableVPC: false
         dbTableName: !Ref dbTableName
-        accessLogQueueUrl: !GetAtt QueueStack.Outputs.AccessLogQueueUrl
-        errorLogQueueUrl: !GetAtt QueueStack.Outputs.ErrorLogQueueUrl
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -83,5 +81,3 @@ Resources:
         apiLayer: !Ref apiLayer
         enableVPC: false
         dbTableName: !Ref dbTableName
-        accessLogQueueUrl: !GetAtt QueueStack.Outputs.AccessLogQueueUrl
-        errorLogQueueUrl: !GetAtt QueueStack.Outputs.ErrorLogQueueUrl

@@ -45,7 +45,6 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
-        "ERROR_LOG_QUEUE_URL": !GetAtt ErrorLogQueue.QueueUrl
     Layers:
       - !Ref coreLayer
     VpcConfig: !If
@@ -79,6 +78,13 @@ Resources:
     Properties:
       VisibilityTimeout: 60
 
+  AccessLogQueueUrlParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !If [ isVPCEnabled, "ACCESS_LOG_QUEUE_URL_VPC", "ACCESS_LOG_QUEUE_URL_NO_VPC" ]
+      Type: "String"
+      Value: !GetAtt AccessLogQueue.QueueUrl
+
   ErrorLogQueueHandler:
     Type: AWS::Serverless::Function
     Properties:
@@ -101,12 +107,54 @@ Resources:
     Properties:
       VisibilityTimeout: 60
 
+  ErrorLogQueueUrlParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !If [ isVPCEnabled, "ERROR_LOG_QUEUE_URL_VPC", "ERROR_LOG_QUEUE_URL_NO_VPC" ]
+      Type: "String"
+      Value: !GetAtt ErrorLogQueue.QueueUrl
+
+  AuthEventQueueHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/auth_event
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+        - SQSPollerPolicy:
+            QueueName: !GetAtt AuthEventQueue.QueueName
+      Handler: auth_event_handler.handle_auth_event
+      Events:
+        ErrorLogEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt AuthEventQueue.Arn
+            BatchSize: 10
+
+  AuthEventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 60
+
+  AuthEventQueueUrlParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !If [ isVPCEnabled, "AUTH_EVENT_QUEUE_URL_VPC", "AUTH_EVENT_QUEUE_URL_NO_VPC" ]
+      Type: "String"
+      Value: !GetAtt AuthEventQueue.QueueUrl
+
 Outputs:
   AccessLogQueueName:
     Value: !GetAtt AccessLogQueue.QueueName
   ErrorLogQueueName:
     Value: !GetAtt ErrorLogQueue.QueueName
+  AuthEventQueueName:
+    Value: !GetAtt AuthEventQueue.QueueName
   AccessLogQueueUrl:
     Value: !GetAtt AccessLogQueue.QueueUrl
   ErrorLogQueueUrl:
     Value: !GetAtt ErrorLogQueue.QueueUrl
+  AuthEventQueueUrl:
+    Value: !GetAtt AuthEventQueue.QueueUrl

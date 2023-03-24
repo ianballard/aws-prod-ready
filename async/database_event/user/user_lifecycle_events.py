@@ -5,6 +5,10 @@ def handle_user_event(event_name, old_image, new_image):
 
 def user_inserted(old_image, new_image):
     print(f"user_inserted: {old_image} {new_image}")
+    # todo: kinesis
+    # todo: opensearch
+    # todo: messaging, etc.
+
 
 
 def user_modified(old_image, new_image):

@@ -38,8 +38,10 @@ Resources:
           AttributeDataType: "String"
           Mutable: true
           Required: true
-      UsernameAttributes:
-        - "email"
+      AliasAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
       VerificationMessageTemplate:
         EmailSubject: "Verification Code"
         EmailMessage: "Your verification code is {####}."
