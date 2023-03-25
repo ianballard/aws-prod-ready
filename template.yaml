@@ -61,9 +61,18 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isSecondary: !Equals [ !Ref stackType, 'secondary' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
   isAWSAuthEnabled: !Equals [ !Ref enableAWSAuth, 'true' ]
   isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -79,6 +88,9 @@ Conditions:
   isOpenSearchAndStorageEnabled: !And
     - !Condition isOpenSearchEnabled
     - !Condition isPersistentStorageEnabled
+  isSecondaryAndBackupEnabled: !And
+    - !Condition isSecondary
+    - !Condition isBackupEnabled
 
 Resources:
 
@@ -91,6 +103,7 @@ Resources:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         dbTableName: !Ref dbTableName
+        enableBackup: !Ref enableBackup
 
   AuthStack:
     Type: "AWS::CloudFormation::Stack"
@@ -121,6 +134,7 @@ Resources:
         stackType: !Ref stackType
         appId: !Ref appId
         enableS3Replication: !Ref enableS3Replication
+        enableBackup: !Ref enableBackup
 
   CoreLibraryLayer:
     Type: AWS::Serverless::LayerVersion
@@ -169,3 +183,9 @@ Resources:
         stackType: !Ref stackType
         dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
         dbTableName: !Ref dbTableName
+
+  BackupDestinationVaultStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isSecondaryAndBackupEnabled
+    Properties:
+      TemplateURL: template.backup.yaml

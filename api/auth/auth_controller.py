@@ -1,6 +1,11 @@
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
-from core_lib.services.auth.auth_service import sign_up, initiate_user_password_auth, confirm_sign_up
+from core_lib.services.auth.auth_service import (
+    sign_up,
+    initiate_user_password_auth,
+    confirm_sign_up,
+    respond_to_new_password_auth_challenge,
+)
 from core_lib.utils.lambda_util import lambda_handler
 from core_lib.data_models.user import user_data_access
 
@@ -15,14 +20,20 @@ def signup(api_request: ApiRequest):
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
     signup_response = sign_up(
-        username=username, email=email, password=password, first_name=first_name, last_name=last_name
+        username=username,
+        email=email,
+        password=password,
+        first_name=first_name,
+        last_name=last_name,
     )
-    user_data_access.create_user({
-        'username': username,
-        'email': email,
-        'first_name': first_name,
-        'last_name': last_name
-    })
+    user_data_access.create_user(
+        {
+            "username": username,
+            "email": email,
+            "first_name": first_name,
+            "last_name": last_name,
+        }
+    )
     return ApiResponse(
         request_headers=api_request.headers,
         status_code=201,
@@ -36,13 +47,24 @@ def confirm_sign_up(api_request: ApiRequest):
     query_parameters = api_request.query_parameters
     username = query_parameters.get("username")
     code = query_parameters.get("code")
-    confirm_sign_up(
-        username=username, code=code
+    confirm_sign_up(username=username, code=code)
+    return ApiResponse(
+        request_headers=api_request.headers, status_code=200, response_body=None
+    ).format()
+
+
+@lambda_handler()
+@api()
+def new_password_auth_challenge(api_request: ApiRequest):
+    body = api_request.body
+    username = body.get("username")
+    password = body.get("password")
+    session = body.get("session")
+    response = respond_to_new_password_auth_challenge(
+        username=username, password=password, session=session
     )
     return ApiResponse(
-        request_headers=api_request.headers,
-        status_code=200,
-        response_body=None
+        request_headers=api_request.headers, status_code=200, response_body=response
     ).format()
 
 

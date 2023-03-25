@@ -29,14 +29,20 @@ def put(api_request: ApiRequest):
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
     admin_create_user(
-        username=username, email=email, password=password, first_name=first_name, last_name=last_name
+        username=username,
+        email=email,
+        password=password,
+        first_name=first_name,
+        last_name=last_name,
     )
-    create_response = user_data_access.create_user({
-        'username': username,
-        'email': email,
-        'first_name': first_name,
-        'last_name': last_name,
-    })
+    create_response = user_data_access.create_user(
+        {
+            "username": username,
+            "email": email,
+            "first_name": first_name,
+            "last_name": last_name,
+        }
+    )
     return ApiResponse(
         api_request.headers,
         status_code=200,

@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Backup Vault Destinations Stack
+
+
+Resources:
+
+  DynamoDBBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "DynamoDBBackupVault-${AWS::Region}"
+
+  S3BackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "S3BackupVault-${AWS::Region}"

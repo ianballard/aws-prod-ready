@@ -222,6 +222,24 @@ Resources:
             Path: /v1.0/confirm_sign_up
             Method: get
 
+  NewPasswordAuthChallenge:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.new_password_auth_challenge
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/new_password_auth_challenge
+            Method: post
+
 Outputs:
   AuthApiUrl:
     Description: "API Gateway endpoint URL for Prod stage"

@@ -13,6 +13,16 @@ Parameters:
   dbTableName:
     Description: "Table Name"
     Type: String
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+
+Conditions:
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
 
 Resources:
 
@@ -72,6 +82,56 @@ Resources:
       Name: "DB_TABLE"
       Type: "String"
       Value: !Ref dbTableName
+
+  DynamoDBBackupVault:
+    Condition: isBackupEnabled
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName:  !Sub "DynamoDBBackupVault-${AWS::Region}"
+
+  DynamoDBBackupRole:
+    Condition: isBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+
+  DynamoDBBackupPlan:
+    Condition: isBackupEnabled
+    Type: 'AWS::Backup::BackupPlan'
+    Properties:
+      BackupPlan:
+        BackupPlanName: DynamoDBBackupPlan
+        BackupPlanRule:
+          - RuleName: DynamoDBDailyBackupAndCopy
+            TargetBackupVault: !Ref DynamoDBBackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DynamoDBBackupVault-${backupRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref DynamoDBBackupPlan
+      BackupSelection:
+        SelectionName: DynamoDBTableBackupSelection
+        IamRoleArn: !GetAtt DynamoDBBackupRole.Arn
+        Resources:
+          - !GetAtt DBTable.Arn
 
 Outputs:
   TableArn:

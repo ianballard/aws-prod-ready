@@ -28,10 +28,21 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
   isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
 
 Resources:
 
@@ -124,6 +135,58 @@ Resources:
       Name: "S3_APP_STORAGE_BUCKET"
       Type: "String"
       Value: !Sub "${appId}-${stage}-${stackType}-app-storage"
+      
+  S3BackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "S3BackupVault-${AWS::Region}"
+
+  S3BackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  S3BackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: S3BackupPlan
+        BackupPlanRule:
+          - RuleName: S3DailyBackupAndCopy
+            TargetBackupVault: !Ref S3BackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:S3BackupVault-${backupRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref S3BackupPlan
+      BackupSelection:
+        SelectionName: S3TableBackupSelection
+        IamRoleArn: !GetAtt S3BackupRole.Arn
+        Resources:
+          - !GetAtt AccessLogBucket.Arn
+          - !GetAtt AppStorage.Arn
 
 Outputs:
   S3ReplicationRoleArn:
@@ -132,4 +195,8 @@ Outputs:
     Value: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
   PrimaryAppStorageBucketName:
     Value: !Sub "${appId}-${stage}-${stackType}-app-storage"
+  PrimaryAccessLogBucketArn:
+    Value: !GetAtt AccessLogBucket.Arn
+  PrimaryAppStorageBucketArn:
+    Value: !GetAtt AppStorage.Arn
 

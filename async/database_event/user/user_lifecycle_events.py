@@ -10,7 +10,6 @@ def user_inserted(old_image, new_image):
     # todo: messaging, etc.
 
 
-
 def user_modified(old_image, new_image):
     print(f"user_modified: {old_image} {new_image}")
 
