@@ -66,6 +66,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonDynamoDBFullAccess
         - AmazonSQSFullAccess
+        - AmazonKinesisFirehoseFullAccess
       Handler: database_event_handler.handle_db_event
       Timeout: 900
       Events:

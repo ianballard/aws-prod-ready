@@ -30,6 +30,10 @@ Parameters:
     Description: "Table Name"
     Type: String
     Default: "DBTable"
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
@@ -69,6 +73,7 @@ Resources:
         apiLayer: !Ref apiLayer
         enableVPC: false
         dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -81,3 +86,4 @@ Resources:
         apiLayer: !Ref apiLayer
         enableVPC: false
         dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins

@@ -61,28 +61,55 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Action:
-                  - 's3:GetReplicationConfiguration'
-                  - 's3:ListBucket'
-                Effect: Allow
+              - Effect: Allow
+                Action:
+                  - s3:GetReplicationConfiguration
+                  - s3:ListBucket
                 Resource: '*'
-              - Action:
-                  - 's3:GetObjectVersion'
-                  - 's3:GetObjectVersionAcl'
-                Effect: Allow
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                  - s3:GetObjectVersionForReplication
+                  - s3:GetObjectVersionTorrent
                 Resource: '*'
-              - Action:
-                  - 's3:ReplicateObject'
-                  - 's3:ReplicateDelete'
-                  - 's3:ObjectOwnerOverrideToBucketOwner'
-                Effect: Allow
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketLocation
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                  - s3:ReplicateTags
+                  - s3:ObjectOwnerOverrideToBucketOwner
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: '*'
+
 
   AccessLogBucket:
     Type: 'AWS::S3::Bucket'
     DeletionPolicy: Retain
     Properties:
       BucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -99,14 +126,38 @@ Resources:
               Destination:
                 Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-access-log-bucket", !Sub "arn:aws:s3:::${appId}-${stage}-primary-access-log-bucket" ]
                 StorageClass: STANDARD
+                EncryptionConfiguration:
+                  ReplicaKmsKeyID: !Sub "arn:aws:kms:${backupRegion}:${AWS::AccountId}:alias/aws/s3"
               Prefix: ''
+              SourceSelectionCriteria:
+                SseKmsEncryptedObjects:
+                  Status: Enabled
         - !Ref AWS::NoValue
+
+  LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowS3ServerAccessLogging'
+            Effect: 'Allow'
+            Principal:
+              Service: 'logging.s3.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${AccessLogBucket}/*'
 
   AppStorage:
     Type: 'AWS::S3::Bucket'
     DeletionPolicy: Retain
     Properties:
       BucketName: !Sub "${appId}-${stage}-${stackType}-app-storage"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -126,7 +177,12 @@ Resources:
               Destination:
                 Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-app-storage", !Sub "arn:aws:s3:::${appId}-${stage}-primary-app-storage" ]
                 StorageClass: STANDARD
+                EncryptionConfiguration:
+                  ReplicaKmsKeyID: !Sub "arn:aws:kms:${backupRegion}:${AWS::AccountId}:alias/aws/s3"
               Prefix: ''
+              SourceSelectionCriteria:
+                SseKmsEncryptedObjects:
+                  Status: Enabled
         - !Ref AWS::NoValue
 
   AppStorageBucketParameter:

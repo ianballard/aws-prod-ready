@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Security Stack
+
+
+Resources:
+
+  EnableSecurityHub:
+    Type: 'AWS::SecurityHub::Hub'
+
+  EnableGuardDuty:
+    Type: 'AWS::GuardDuty::Detector'
+    Properties:
+      Enable: true
+
+  EnableConfig:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      RecordingGroup:
+        AllSupported: true
+      RoleARN: !GetAtt 'ConfigServiceRole.Arn'
+
+  ConfigServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'config.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSConfigRoleForOrganizations'
+
+  ConfigBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+
+  ConfigBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'config.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource:  !Join ['', [!GetAtt ConfigBucket.Arn, '/*']]
+            Condition:
+              StringEquals:
+                'aws:SecureTransport': 'true'
+          - Effect: 'Allow'
+            Principal:
+              Service: 'config.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigBucket.Arn

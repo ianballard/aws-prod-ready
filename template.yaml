@@ -68,6 +68,17 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
+  enableSecurity:
+    Description: "Is security enabled (true|false) - Security Hub, GuardDuty, Config"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
@@ -79,6 +90,7 @@ Conditions:
   isVPCDisabled: !Equals [ !Ref enableVPC, 'false' ]
   isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
   isPersistentStorageEnabled: !Equals [ !Ref enablePersistentStorage, 'true' ]
+  isSecurityEnabled: !Equals [ !Ref enableSecurity, 'true' ]
   isPrimaryAndStorageEnabled: !And
     - !Condition isPrimary
     - !Condition isPersistentStorageEnabled
@@ -169,6 +181,7 @@ Resources:
         stackType: !Ref stackType
         dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
         dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
 
   NonVPCStack:
     Type: "AWS::CloudFormation::Stack"
@@ -183,9 +196,29 @@ Resources:
         stackType: !Ref stackType
         dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
         dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
 
   BackupDestinationVaultStack:
     Type: "AWS::CloudFormation::Stack"
     Condition: isSecondaryAndBackupEnabled
     Properties:
       TemplateURL: template.backup.yaml
+
+  DataPipelineStack:
+    Condition: isPersistentStorageEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.data-pipeline.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        appId: !Ref appId
+        enableS3Replication: !Ref enableS3Replication
+        enableBackup: !Ref enableBackup
+        stackType: !Ref stackType
+
+  SecurityStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isSecurityEnabled
+    Properties:
+      TemplateURL: template.security.yaml

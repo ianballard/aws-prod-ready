@@ -30,10 +30,13 @@ Parameters:
     Description: "Table Name"
     Type: String
     Default: "DBTable"
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
-
 
 Resources:
 
@@ -201,6 +204,7 @@ Resources:
         vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
         enableVPC: true
         dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -215,3 +219,4 @@ Resources:
         vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
         enableVPC: true
         dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
