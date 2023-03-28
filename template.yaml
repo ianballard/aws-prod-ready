@@ -222,3 +222,5 @@ Resources:
     Condition: isSecurityEnabled
     Properties:
       TemplateURL: template.security.yaml
+      Parameters:
+        stackType: !Ref stackType

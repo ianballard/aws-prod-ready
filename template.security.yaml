@@ -2,7 +2,19 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Security Stack
+  
 
+Parameters:
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
 
 Resources:
 
@@ -14,25 +26,62 @@ Resources:
     Properties:
       Enable: true
 
+  ConfigSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: !Sub "awsconfig-topic-${AWS::Region}"
+
   EnableConfig:
     Type: 'AWS::Config::ConfigurationRecorder'
     Properties:
+      Name: "default"
       RecordingGroup:
         AllSupported: true
-      RoleARN: !GetAtt 'ConfigServiceRole.Arn'
+        IncludeGlobalResourceTypes: true
+      RoleARN: !GetAtt ConfigServiceRole.Arn
 
   ConfigServiceRole:
-    Type: 'AWS::IAM::Role'
+    Type: "AWS::IAM::Role"
     Properties:
+      RoleName: !Sub "awsconfig-service-role-${AWS::Region}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Effect: 'Allow'
+          - Effect: "Allow"
             Principal:
-              Service: 'config.amazonaws.com'
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSConfigRoleForOrganizations'
+              Service: "config.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "AWSConfigServicePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "config:Put*"
+                  - "config:Get*"
+                  - "config:List*"
+                  - "config:Describe*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetBucketAcl"
+                Resource:
+                  - !Sub "arn:aws:s3:::${ConfigBucket}"
+                  - !Sub "arn:aws:s3:::${ConfigBucket}/*"
+              - Effect: "Allow"
+                Action:
+                  - "sns:Publish"
+                Resource: !Ref ConfigSNSTopic
+
+  ConfigDeliveryChannel:
+    Type: "AWS::Config::DeliveryChannel"
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: "TwentyFour_Hours"
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref ConfigSNSTopic
 
   ConfigBucket:
     Type: 'AWS::S3::Bucket'
@@ -49,22 +98,105 @@ Resources:
               SSEAlgorithm: 'aws:kms'
 
   ConfigBucketPolicy:
-    Type: 'AWS::S3::BucketPolicy'
+    Type: "AWS::S3::BucketPolicy"
     Properties:
       Bucket: !Ref ConfigBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Effect: 'Allow'
+          - Sid: "AWSConfigBucketPermissions"
+            Effect: "Allow"
             Principal:
-              Service: 'config.amazonaws.com'
-            Action: 's3:PutObject'
-            Resource:  !Join ['', [!GetAtt ConfigBucket.Arn, '/*']]
+              Service: "config.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}"
+          - Sid: "AWSConfigBucketDelivery"
+            Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}/*"
             Condition:
               StringEquals:
-                'aws:SecureTransport': 'true'
-          - Effect: 'Allow'
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+  CloudTrailBucket:
+    Condition: isPrimary
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+
+  CloudTrailBucketPolicy:
+    Condition: isPrimary
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:Delete*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Effect: Allow
             Principal:
-              Service: 'config.amazonaws.com'
+              Service: 'cloudtrail.amazonaws.com'
             Action: 's3:GetBucketAcl'
-            Resource: !GetAtt ConfigBucket.Arn
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}'
+          - Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+
+  CloudTrail:
+    Condition: isPrimary
+    Type: 'AWS::CloudTrail::Trail'
+    Properties:
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      TrailName: 'GlobalCloudTrail'
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      EventSelectors:
+        - IncludeManagementEvents: true
+        - DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - 'arn:aws:s3'
+        - DataResources:
+            - Type: 'AWS::DynamoDB::Table'
+              Values:
+                - 'arn:aws:dynamodb'
+
+Outputs:
+  SecurityHubArn:
+    Description: "Security Hub ARN"
+    Value: !Ref EnableSecurityHub
+  GuardDutyDetectorId:
+    Description: "GuardDuty Detector ID"
+    Value: !Ref EnableGuardDuty
