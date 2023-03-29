@@ -57,7 +57,7 @@ Resources:
               Service: 's3.amazonaws.com'
             Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: 'PrimaryAccessLogS3ReplicationPolicy'
+        - PolicyName: 'AccessLogS3ReplicationPolicy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -121,7 +121,7 @@ Resources:
         - isS3ReplicationEnabled
         - Role: !GetAtt S3ReplicationRole.Arn
           Rules:
-            - Id: 'PrimaryAccessLogsToSecondaryAccessLogsReplication'
+            - Id: 'AccessLogsToSecondaryAccessLogsReplication'
               Status: Enabled
               Destination:
                 Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-access-log-bucket", !Sub "arn:aws:s3:::${appId}-${stage}-primary-access-log-bucket" ]
@@ -172,7 +172,7 @@ Resources:
         - isS3ReplicationEnabled
         - Role: !GetAtt S3ReplicationRole.Arn
           Rules:
-            - Id: 'PrimaryAppStorageToSecondaryAppStorageReplication'
+            - Id: 'AppStorageReplication'
               Status: Enabled
               Destination:
                 Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-app-storage", !Sub "arn:aws:s3:::${appId}-${stage}-primary-app-storage" ]
@@ -238,7 +238,7 @@ Resources:
     Properties:
       BackupPlanId: !Ref S3BackupPlan
       BackupSelection:
-        SelectionName: S3TableBackupSelection
+        SelectionName: S3BackupSelection
         IamRoleArn: !GetAtt S3BackupRole.Arn
         Resources:
           - !GetAtt AccessLogBucket.Arn
@@ -247,12 +247,12 @@ Resources:
 Outputs:
   S3ReplicationRoleArn:
     Value: !GetAtt S3ReplicationRole.Arn
-  PrimaryAccessLogBucketName:
+  AccessLogBucketName:
     Value: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
-  PrimaryAppStorageBucketName:
+  AppStorageBucketName:
     Value: !Sub "${appId}-${stage}-${stackType}-app-storage"
-  PrimaryAccessLogBucketArn:
+  AccessLogBucketArn:
     Value: !GetAtt AccessLogBucket.Arn
-  PrimaryAppStorageBucketArn:
+  AppStorageBucketArn:
     Value: !GetAtt AppStorage.Arn
 

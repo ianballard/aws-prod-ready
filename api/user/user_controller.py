@@ -10,6 +10,7 @@ from api_lib.response.api_response import ApiResponse
 from core_lib.data_models.user import user_data_access
 from core_lib.services.auth.auth_service import admin_create_user
 from core_lib.utils.lambda_util import lambda_handler
+from core_lib.utils.thread_util import safe_get_thread_attribute
 
 
 @lambda_handler()
@@ -54,7 +55,6 @@ def put(api_request: ApiRequest):
 @api()
 @authorize(
     Authorization(
-        user_group=UserGroup.User,
         action_type=ActionType.List,
         resource_access=ResourceAccess.AccessUser,
     )
@@ -63,7 +63,9 @@ def query(api_request: ApiRequest):
     return ApiResponse(
         api_request.headers,
         status_code=200,
-        response_body=user_data_access.query_all_users(),
+        response_body=user_data_access.query_related_users(
+            user_a_id=safe_get_thread_attribute("principle")
+        ),
     ).format()
 
 
@@ -71,7 +73,6 @@ def query(api_request: ApiRequest):
 @api()
 @authorize(
     Authorization(
-        user_group=UserGroup.User,
         action_type=ActionType.Get,
         resource_access=ResourceAccess.AccessUser,
     )
@@ -89,7 +90,6 @@ def get(api_request: ApiRequest):
 @api()
 @authorize(
     Authorization(
-        user_group=UserGroup.User,
         action_type=ActionType.Update,
         resource_access=ResourceAccess.AccessUser,
     )

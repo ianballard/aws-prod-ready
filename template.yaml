@@ -213,7 +213,6 @@ Resources:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         appId: !Ref appId
-        enableS3Replication: !Ref enableS3Replication
         enableBackup: !Ref enableBackup
         stackType: !Ref stackType
 
@@ -224,3 +223,6 @@ Resources:
       TemplateURL: template.security.yaml
       Parameters:
         stackType: !Ref stackType
+        backupRegion: !Ref backupRegion
+        accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName
+        enableBackup: !Ref enableBackup

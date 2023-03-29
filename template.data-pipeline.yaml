@@ -21,13 +21,6 @@ Parameters:
     Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
     Type: String
     Default: "t52x7zk6ls6p"
-  enableS3Replication:
-    Description: "Is s3 replication enabled (true|false) NOTE: buckets must exist"
-    Type: String
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'false'
   enableBackup:
     Description: "Is aws backup enabled (true|false)"
     Type: String
@@ -39,7 +32,6 @@ Parameters:
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
-  isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
   isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
   isPrimaryAndBackupEnabled: !And
     - !Condition isPrimary
@@ -120,17 +112,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
         LogFilePrefix: 'data-pipeline-access-logs/'
-      ReplicationConfiguration: !If
-        - isS3ReplicationEnabled
-        - Role: !GetAtt S3ReplicationRole.Arn
-          Rules:
-            - Id: 'ReplicationRule'
-              Status: Enabled
-              Destination:
-                Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-data-pipeline-destination", !Sub "arn:aws:s3:::${appId}-${stage}-primary-data-pipeline-destination" ]
-                StorageClass: STANDARD
-              Prefix: ''
-        - !Ref AWS::NoValue
 
   FirehoseDeliveryRole:
     Condition: isPrimary
@@ -202,6 +183,57 @@ Resources:
       Name: "FIREHOSE_DELIVERY_STREAM"
       Type: "String"
       Value: !Ref FirehoseDeliveryStream
+
+  DataPipelineBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "DataPipelineBackupVault-${AWS::Region}"
+
+  S3BackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  DataPipelineBackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: DataPipelineBackupPlan
+        BackupPlanRule:
+          - RuleName: S3DailyBackupAndCopy
+            TargetBackupVault: !Ref DataPipelineBackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DataPipelineBackupVault-${backupRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref DataPipelineBackupPlan
+      BackupSelection:
+        SelectionName: S3TableBackupSelection
+        IamRoleArn: !GetAtt S3BackupRole.Arn
+        Resources:
+          - !GetAtt DataPipelineDestinationS3Bucket.Arn
 
 Outputs:
   DataPipelineDestinationS3BucketName:

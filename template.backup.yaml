@@ -15,3 +15,13 @@ Resources:
     Type: 'AWS::Backup::BackupVault'
     Properties:
       BackupVaultName: !Sub "S3BackupVault-${AWS::Region}"
+
+  DataPipelineBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "DataPipelineBackupVault-${AWS::Region}"
+
+  CloudTrailBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "CloudTrailBackupVault-${AWS::Region}"

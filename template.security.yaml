@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Security Stack
-  
 
 Parameters:
   stackType:
@@ -12,9 +11,26 @@ Parameters:
       - 'primary'
       - 'secondary'
     Default: 'primary'
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  accessLogBucket:
+    Description: "Access Log Bucket Name"
+    Type: String
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
 
 Resources:
 
@@ -96,6 +112,9 @@ Resources:
           - ServerSideEncryptionByDefault:
               KMSMasterKeyID: 'alias/aws/s3'
               SSEAlgorithm: 'aws:kms'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLogBucket
+        LogFilePrefix: 'config-access-logs/'
 
   ConfigBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
@@ -121,7 +140,6 @@ Resources:
                 "s3:x-amz-acl": "bucket-owner-full-control"
 
   CloudTrailBucket:
-    Condition: isPrimary
     Type: 'AWS::S3::Bucket'
     Properties:
       PublicAccessBlockConfiguration:
@@ -134,6 +152,9 @@ Resources:
           - ServerSideEncryptionByDefault:
               KMSMasterKeyID: 'alias/aws/s3'
               SSEAlgorithm: 'aws:kms'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLogBucket
+        LogFilePrefix: 'cloud-trail-access-logs/'
 
   CloudTrailBucketPolicy:
     Condition: isPrimary
@@ -171,6 +192,30 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
 
+  TrailKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting CloudTrail logs
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow CloudTrail to use KMS key
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:DescribeKey
+            Resource: '*'
 
   CloudTrail:
     Condition: isPrimary
@@ -182,16 +227,66 @@ Resources:
       TrailName: 'GlobalCloudTrail'
       S3BucketName: !Ref CloudTrailBucket
       IsLogging: true
+      KMSKeyId: !Ref TrailKmsKey
       EventSelectors:
-        - IncludeManagementEvents: true
         - DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - 'arn:aws:s3'
-        - DataResources:
-            - Type: 'AWS::DynamoDB::Table'
-              Values:
-                - 'arn:aws:dynamodb'
+            - Type: "AWS::DynamoDB::Table"
+              Values: [ "arn:aws:dynamodb" ]
+            - Type: "AWS::S3::Object"
+              Values: [ "arn:aws:s3" ]
+          IncludeManagementEvents: true
+          ReadWriteType: All
+
+  CloudTrailBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "CloudTrailBackupVault-${AWS::Region}"
+
+  CloudTrailBackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  CloudTrailBackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: CloudTrailBackupPlan
+        BackupPlanRule:
+          - RuleName: CloudTrailDailyBackupAndCopy
+            TargetBackupVault: !Ref CloudTrailBackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:CloudTrailBackupVault-${backupRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref CloudTrailBackupPlan
+      BackupSelection:
+        SelectionName: CloudTrailBucketBackupSelection
+        IamRoleArn: !GetAtt CloudTrailBackupRole.Arn
+        Resources:
+          - !GetAtt CloudTrailBucket.Arn
 
 Outputs:
   SecurityHubArn:
