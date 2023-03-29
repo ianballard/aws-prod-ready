@@ -1,11 +1,6 @@
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
-from core_lib.services.auth.auth_service import (
-    sign_up,
-    initiate_user_password_auth,
-    confirm_sign_up,
-    respond_to_new_password_auth_challenge,
-)
+from core_lib.services.auth import auth_service
 from core_lib.utils.lambda_util import lambda_handler
 from core_lib.data_models.user import user_data_access
 
@@ -19,7 +14,7 @@ def signup(api_request: ApiRequest):
     password = request_body.get("password")
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
-    signup_response = sign_up(
+    signup_response = auth_service.sign_up(
         username=username,
         email=email,
         password=password,
@@ -47,7 +42,7 @@ def confirm_sign_up(api_request: ApiRequest):
     query_parameters = api_request.query_parameters
     username = query_parameters.get("username")
     code = query_parameters.get("code")
-    confirm_sign_up(username=username, code=code)
+    auth_service.confirm_sign_up(username=username, code=code)
     return ApiResponse(
         request_headers=api_request.headers, status_code=200, response_body=None
     ).format()
@@ -60,7 +55,7 @@ def new_password_auth_challenge(api_request: ApiRequest):
     username = body.get("username")
     password = body.get("password")
     session = body.get("session")
-    response = respond_to_new_password_auth_challenge(
+    response = auth_service.respond_to_new_password_auth_challenge(
         username=username, password=password, session=session
     )
     return ApiResponse(
@@ -74,7 +69,7 @@ def authenticate(api_request: ApiRequest):
     request_body = api_request.body
     username = request_body.get("username")
     password = request_body.get("password")
-    authentication_response = initiate_user_password_auth(
+    authentication_response = auth_service.initiate_user_password_auth(
         username=username, password=password
     )
     return ApiResponse(

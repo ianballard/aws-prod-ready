@@ -80,6 +80,23 @@ Resources:
             Path: /v1.0/signup
             Method: post
 
+  ConfirmSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.confirm_sign_up
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/confirm_sign_up
+            Method: get
+
   AuthenticateFunction:
     Type: AWS::Serverless::Function
     Properties:
