@@ -14,6 +14,10 @@ Parameters:
     Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
     Type: String
     Default: "abc123abc123"
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
   stackType:
     Description: "(primary|secondary)"
     Type: String
@@ -28,10 +32,6 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
-  dbTableName:
-    Description: "Table Name"
-    Type: String
-    Default: "DBTable"
   enableVPC:
     Description: "Enable VPC (true|false|null)"
     Type: String
@@ -126,15 +126,15 @@ Resources:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
 
-  OpenSearchStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: isOpenSearchAndStorageEnabled
-    Properties:
-      TemplateURL: template.opensearch.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-
+#  OpenSearchStack:
+#    Type: "AWS::CloudFormation::Stack"
+#    Condition: isOpenSearchAndStorageEnabled
+#    Properties:
+#      TemplateURL: template.opensearch.yaml
+#      Parameters:
+#        stage: !Ref stage
+#        backupRegion: !Ref backupRegion
+#
   S3Stack:
     Type: "AWS::CloudFormation::Stack"
     Condition: isPersistentStorageEnabled
@@ -203,6 +203,8 @@ Resources:
     Condition: isSecondaryAndBackupEnabled
     Properties:
       TemplateURL: template.backup.yaml
+      Parameters:
+       stage: !Ref stage
 
   DataPipelineStack:
     Condition: isPersistentStorageEnabled
@@ -222,6 +224,7 @@ Resources:
     Properties:
       TemplateURL: template.security.yaml
       Parameters:
+        stage: !Ref stage
         stackType: !Ref stackType
         backupRegion: !Ref backupRegion
         accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName

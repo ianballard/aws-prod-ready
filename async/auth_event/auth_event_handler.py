@@ -22,9 +22,15 @@ def handle_auth_event(event):
 
 
 def handle_sign_up(
-    username: str, email: str, password: str, first_name: str, last_name: str
+    app_user_id: str,
+    username: str,
+    email: str,
+    password: str,
+    first_name: str,
+    last_name: str,
 ):
     cognito_service.admin_create_user(
+        app_user_id=app_user_id,
         username=username,
         email=email,
         password=password,
@@ -37,18 +43,19 @@ def handle_sign_up(
 
 
 def handle_confirm_sign_up(username: str, code: str):
-    cognito_service.confirm_sign_up(username=username, code=code)
     cognito_service.admin_enable_user(username=username)
+    cognito_service.confirm_sign_up(username=username, code=code)
 
 
 def handle_respond_to_new_password_auth_challenge(
     username: str, password: str, session: str
 ):
-    cognito_service.admin_set_user_password(username=username, password=password)
     cognito_service.admin_enable_user(username=username)
+    cognito_service.admin_set_user_password(username=username, password=password)
 
 
 def handle_admin_create_user(
+    app_user_id: str,
     username: str,
     email: str,
     password: str,
@@ -58,6 +65,7 @@ def handle_admin_create_user(
     is_password_permanent: bool = False,
 ):
     cognito_service.admin_create_user(
+        app_user_id=app_user_id,
         username=username,
         email=email,
         password=password,

@@ -4,6 +4,9 @@ Description: >
   Security Stack
 
 Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
   stackType:
     Description: "(primary|secondary)"
     Type: String
@@ -45,7 +48,7 @@ Resources:
   ConfigSNSTopic:
     Type: "AWS::SNS::Topic"
     Properties:
-      TopicName: !Sub "awsconfig-topic-${AWS::Region}"
+      TopicName: !Sub "awsconfig-topic-${stage}-${AWS::Region}"
 
   EnableConfig:
     Type: 'AWS::Config::ConfigurationRecorder'
@@ -59,7 +62,7 @@ Resources:
   ConfigServiceRole:
     Type: "AWS::IAM::Role"
     Properties:
-      RoleName: !Sub "awsconfig-service-role-${AWS::Region}"
+      RoleName: !Sub "awsconfig-service-role-${stage}-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -101,6 +104,7 @@ Resources:
 
   ConfigBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
     Properties:
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -141,6 +145,7 @@ Resources:
 
   CloudTrailBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
     Properties:
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -241,7 +246,7 @@ Resources:
     Type: 'AWS::Backup::BackupVault'
     Condition: isPrimaryAndBackupEnabled
     Properties:
-      BackupVaultName: !Sub "CloudTrailBackupVault-${AWS::Region}"
+      BackupVaultName: !Sub "CloudTrailBackupVault-${stage}-${AWS::Region}"
 
   CloudTrailBackupRole:
     Condition: isPrimaryAndBackupEnabled
@@ -273,7 +278,7 @@ Resources:
             Lifecycle:
               DeleteAfterDays: 60
             CopyActions:
-              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:CloudTrailBackupVault-${backupRegion}"
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:CloudTrailBackupVault-${stage}-${backupRegion}"
                 Lifecycle:
                   DeleteAfterDays: 60
 

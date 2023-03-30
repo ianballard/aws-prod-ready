@@ -1,3 +1,5 @@
+import uuid
+
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
 from core_lib.services.auth import auth_service
@@ -14,7 +16,9 @@ def signup(api_request: ApiRequest):
     password = request_body.get("password")
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
+    profile = str(uuid.uuid4())
     signup_response = auth_service.sign_up(
+        profile=profile,
         username=username,
         email=email,
         password=password,
@@ -23,6 +27,7 @@ def signup(api_request: ApiRequest):
     )
     user_data_access.create_user(
         {
+            "profile": profile,
             "username": username,
             "email": email,
             "first_name": first_name,

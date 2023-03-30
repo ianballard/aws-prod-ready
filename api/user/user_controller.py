@@ -1,3 +1,6 @@
+import os
+import uuid
+
 from api_lib.auth.authorization import (
     authorize,
     Authorization,
@@ -29,7 +32,9 @@ def put(api_request: ApiRequest):
     password = request_body.get("password")
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
+    profile = str(uuid.uuid4())
     admin_create_user(
+        profile=profile,
         username=username,
         email=email,
         password=password,
@@ -38,6 +43,7 @@ def put(api_request: ApiRequest):
     )
     create_response = user_data_access.create_user(
         {
+            "profile": profile,
             "username": username,
             "email": email,
             "first_name": first_name,
@@ -63,7 +69,7 @@ def query(api_request: ApiRequest):
     return ApiResponse(
         api_request.headers,
         status_code=200,
-        response_body=user_data_access.query_related_users(
+        response_body=user_data_access.query_associated_users_with_profiles(
             user_a_id=safe_get_thread_attribute("principle")
         ),
     ).format()
@@ -121,4 +127,24 @@ def delete(api_request: ApiRequest):
         api_request.headers,
         status_code=200,
         response_body=user_data_access.delete_user_by_id(path_parameters.get("id")),
+    ).format()
+
+
+@lambda_handler()
+@api()
+@authorize(
+    Authorization(
+        action_type=ActionType.Associate,
+        resource_access=ResourceAccess.AccessUser,
+    )
+)
+def associate(api_request: ApiRequest):
+    path_parameters = api_request.path_parameters
+    return ApiResponse(
+        api_request.headers,
+        status_code=201,
+        response_body=user_data_access.associate_users(
+            user_a_id=safe_get_thread_attribute("principle"),
+            user_b_id=path_parameters.get("id"),
+        ),
     ).format()

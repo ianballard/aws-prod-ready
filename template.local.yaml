@@ -15,7 +15,7 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
-        "DB_TABLE": "DBTable"
+        "DB_TABLE": "DBTable-development"
     Layers:
       - !Ref CoreLibraryLayer
       - !Ref ApiLibraryLayer
@@ -199,3 +199,20 @@ Resources:
             Path: /v1.0/user/{id}
             Method: delete
 
+  AssociateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.associate
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+        - AmazonCognitoPowerUser
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user/{id}/associate
+            Method: put

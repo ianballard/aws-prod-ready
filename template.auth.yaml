@@ -16,7 +16,7 @@ Resources:
   AppUserPool:
     Type: "AWS::Cognito::UserPool"
     Properties:
-      UserPoolName: !Sub "AppUserPool-${AWS::Region}"
+      UserPoolName: !Sub "AppUserPool-${stage}-${AWS::Region}"
       DeletionProtection: ACTIVE
       Policies:
         PasswordPolicy:
@@ -38,6 +38,10 @@ Resources:
           AttributeDataType: "String"
           Mutable: true
           Required: true
+        - Name: "profile"
+          AttributeDataType: "String"
+          Mutable: false
+          Required: true
       AliasAttributes:
         - email
       AutoVerifiedAttributes:
@@ -57,7 +61,7 @@ Resources:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref AppUserPool
-      ClientName: !Sub "UserPoolClient-${AWS::Region}"
+      ClientName: !Sub "UserPoolClient-${stage}-${AWS::Region}"
       GenerateSecret: true
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH

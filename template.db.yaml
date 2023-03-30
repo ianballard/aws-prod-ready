@@ -29,7 +29,7 @@ Resources:
   DBTable:
     Type: AWS::DynamoDB::GlobalTable
     Properties:
-      TableName: !Ref dbTableName
+      TableName: !Sub '${dbTableName}-${stage}'
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
@@ -81,13 +81,13 @@ Resources:
     Properties:
       Name: "DB_TABLE"
       Type: "String"
-      Value: !Ref dbTableName
+      Value: !Sub '${dbTableName}-${stage}'
 
   DynamoDBBackupVault:
     Condition: isBackupEnabled
     Type: 'AWS::Backup::BackupVault'
     Properties:
-      BackupVaultName:  !Sub "DynamoDBBackupVault-${AWS::Region}"
+      BackupVaultName:  !Sub "DynamoDBBackupVault-${stage}-${AWS::Region}"
 
   DynamoDBBackupRole:
     Condition: isBackupEnabled
@@ -118,7 +118,7 @@ Resources:
             Lifecycle:
               DeleteAfterDays: 60
             CopyActions:
-              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DynamoDBBackupVault-${backupRegion}"
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DynamoDBBackupVault-${stage}-${backupRegion}"
                 Lifecycle:
                   DeleteAfterDays: 60
 

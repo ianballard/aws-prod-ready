@@ -16,7 +16,7 @@ Globals:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
         "BACKUP_REGION": !Ref backupRegion
-        "DB_TABLE": !Ref dbTableName
+        "DB_TABLE": !Sub '${dbTableName}-${stage}'
         "VPC_ENABLED": !Ref enableVPC
         "CORS_ALLOWED_ORIGINS": !Ref corsAllowedOrigins
     Layers:

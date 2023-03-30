@@ -196,7 +196,7 @@ Resources:
     Type: 'AWS::Backup::BackupVault'
     Condition: isPrimaryAndBackupEnabled
     Properties:
-      BackupVaultName: !Sub "S3BackupVault-${AWS::Region}"
+      BackupVaultName: !Sub "S3BackupVault-${stage}-${AWS::Region}"
 
   S3BackupRole:
     Condition: isPrimaryAndBackupEnabled
@@ -228,7 +228,7 @@ Resources:
             Lifecycle:
               DeleteAfterDays: 60
             CopyActions:
-              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:S3BackupVault-${backupRegion}"
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:S3BackupVault-${stage}-${backupRegion}"
                 Lifecycle:
                   DeleteAfterDays: 60
 

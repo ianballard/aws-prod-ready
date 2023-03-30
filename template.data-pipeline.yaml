@@ -220,7 +220,7 @@ Resources:
             Lifecycle:
               DeleteAfterDays: 60
             CopyActions:
-              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DataPipelineBackupVault-${backupRegion}"
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DataPipelineBackupVault-${stage}-${backupRegion}"
                 Lifecycle:
                   DeleteAfterDays: 60
 
