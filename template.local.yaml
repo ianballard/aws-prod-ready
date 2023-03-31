@@ -216,3 +216,18 @@ Resources:
           Properties:
             Path: /v1.0/user/{id}/associate
             Method: put
+
+  UpdateManagedAccessLogGroups:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: async/log_management/app_access_log_management
+      Handler: update_managed_access_log_groups.test
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambda_FullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /update_managed_log_groups
+            Method: get

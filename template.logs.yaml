@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Log Management Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+
+Globals:
+  Function:
+    MemorySize: 256
+    Timeout: 900
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+    Layers:
+      - !Ref coreLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
+Resources:
+
+  AccessLogHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/log_management/app_access_log_management
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+      Handler: app_access_logger.log_access_event
+
+  ErrorLogHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/log_management/app_error_log_management
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+      Handler: app_error_logger.log_error_event
+
+  UpdateManagedAccessLogGroups:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: async/log_management/app_access_log_management
+      Handler: update_managed_access_log_groups.update_managed_log_groups
+      Environment:
+        Variables:
+          "APP_ACCESS_LOGGER_FUNCTION_ARN": !GetAtt AccessLogHandler.Arn
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambda_FullAccess
+        - CloudWatchLogsFullAccess
+      Events:
+        Cron:
+          Type: Schedule
+          Properties:
+            Enabled: True
+            Schedule: cron(0/5 * * * ? *)
+
+  UpdateManagedErrorLogGroups:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: async/log_management/app_error_log_management
+      Handler: update_managed_error_log_groups.update_managed_log_groups
+      Environment:
+        Variables:
+          "APP_ERROR_LOGGER_FUNCTION_ARN": !GetAtt ErrorLogHandler.Arn
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSLambda_FullAccess
+        - CloudWatchLogsFullAccess
+      Events:
+        Cron:
+          Type: Schedule
+          Properties:
+            Enabled: True
+            Schedule: cron(0/5 * * * ? *)

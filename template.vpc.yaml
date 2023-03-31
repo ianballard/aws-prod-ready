@@ -220,3 +220,15 @@ Resources:
         enableVPC: true
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
+
+  LogManagementStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.logs.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref coreLayer
+        securityGroup: !Ref SecurityGroup
+        vpcSubnetIds: !Join [ ',', [ !Ref PrivateSubnet1 ] ]  # Comma-separated list of subnet IDs
+        enableVPC: true
