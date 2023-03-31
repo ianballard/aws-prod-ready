@@ -16,6 +16,7 @@ Globals:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
         "DB_TABLE": "DBTable-development"
+        "APP_ACCESS_LOGGER_FUNCTION_ARN": "arn:aws:lambda:us-east-2:051768043013:function:app-backend-NonVPCStack-FN5GL9JXC-AccessLogHandler-P0OmBNHdaNaP"
     Layers:
       - !Ref CoreLibraryLayer
       - !Ref ApiLibraryLayer
@@ -221,7 +222,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: async/log_management/app_access_log_management
-      Handler: update_managed_access_log_groups.test
+      Handler: update_managed_access_log_groups.update_managed_log_groups
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - AWSLambda_FullAccess
