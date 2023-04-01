@@ -14,6 +14,7 @@ from core_lib.data_models.user import user_data_access
 from core_lib.services.auth.auth_service import admin_create_user
 from core_lib.utils.lambda_util import lambda_handler
 from core_lib.utils.thread_util import safe_get_thread_attribute
+from core_lib.utils.uuid_util import generate_uuid
 
 
 @lambda_handler()
@@ -32,7 +33,7 @@ def put(api_request: ApiRequest):
     password = request_body.get("password")
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
-    profile = str(uuid.uuid4())
+    profile = generate_uuid()
     admin_create_user(
         profile=profile,
         username=username,
