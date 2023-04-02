@@ -129,6 +129,123 @@ Resources:
       EndpointConfiguration:
         Type: REGIONAL
       StageName: Prod
+      DefinitionBody:
+        openapi: 3.0.1
+        paths:
+          /v1.0/signup:
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        username:
+                          type: string
+                          minLength: 4
+                        password:
+                          type: string
+                          minimum: 8
+                        email:
+                          type: string
+                          minLength: 3
+                        first_name:
+                          type: string
+                          minLength: 1
+                        last_name:
+                          type: string
+                          minLength: 1
+                      required:
+                        - username
+                        - password
+                        - email
+                        - first_name
+                        - last_name
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SignUpFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateRequestBody
+          /v1.0/confirm_sign_up:
+            get:
+              parameters:
+                - name: username
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                    minLength: 4
+                - name: code
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                    minimum: 6
+                    maximum: 6
+              x-amazon-apigateway-integration:
+                httpMethod: get
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfirmSignUpFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateRequestParameters
+          /v1.0/auth:
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        username:
+                          type: string
+                          minLength: 4
+                        password:
+                          type: string
+                          minimum: 8
+                      required:
+                        - username
+                        - password
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthenticateFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateRequestBody
+          /v1.0/new_password_auth_challenge:
+            post:
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        username:
+                          type: string
+                          minLength: 4
+                        password:
+                          type: string
+                          minimum: 8
+                        session:
+                          type: string
+                          minimum: 36
+                      required:
+                        - username
+                        - password
+                        - session
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${NewPasswordAuthChallenge.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateRequestBody
+          requestValidators:
+            ValidateRequestBody:
+              validateRequestBody: true
+              validateRequestParameters: true
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
