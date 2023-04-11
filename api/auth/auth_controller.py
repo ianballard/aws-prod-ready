@@ -16,7 +16,7 @@ def signup(api_request: ApiRequest):
     first_name = request_body.get("first_name")
     last_name = request_body.get("last_name")
     profile = generate_uuid()
-    signup_response = auth_service.sign_up(
+    signup_response = auth_service.replicated_sign_up(
         profile=profile,
         username=username,
         email=email,
@@ -47,7 +47,7 @@ def confirm_sign_up(api_request: ApiRequest):
     query_parameters = api_request.query_parameters
     username = query_parameters.get("username")
     code = query_parameters.get("code")
-    auth_service.confirm_sign_up(username=username, code=code)
+    auth_service.replicated_confirm_sign_up(username=username, code=code)
     return ApiResponse(
         request_headers=api_request.headers, status_code=200, response_body=None
     ).format()
