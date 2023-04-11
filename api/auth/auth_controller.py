@@ -1,10 +1,8 @@
-import uuid
-
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
+from core_lib.data_models.user import user_data_access
 from core_lib.services.auth import auth_service
 from core_lib.utils.lambda_util import lambda_handler
-from core_lib.data_models.user import user_data_access
 from core_lib.utils.uuid_util import generate_uuid
 
 
@@ -52,21 +50,6 @@ def confirm_sign_up(api_request: ApiRequest):
     auth_service.confirm_sign_up(username=username, code=code)
     return ApiResponse(
         request_headers=api_request.headers, status_code=200, response_body=None
-    ).format()
-
-
-@lambda_handler()
-@api()
-def new_password_auth_challenge(api_request: ApiRequest):
-    body = api_request.body
-    username = body.get("username")
-    password = body.get("password")
-    session = body.get("session")
-    response = auth_service.respond_to_new_password_auth_challenge(
-        username=username, password=password, session=session
-    )
-    return ApiResponse(
-        request_headers=api_request.headers, status_code=200, response_body=response
     ).format()
 
 

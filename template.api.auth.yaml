@@ -146,7 +146,7 @@ Resources:
                           minLength: 4
                         password:
                           type: string
-                          minimum: 8
+                          minLength: 8
                         email:
                           type: string
                           minLength: 3
@@ -167,7 +167,7 @@ Resources:
                 type: aws_proxy
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SignUpFunction.Arn}/invocations
-              x-amazon-apigateway-request-validator: ValidateRequestBody
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
           /v1.0/confirm_sign_up:
             get:
               parameters:
@@ -182,14 +182,14 @@ Resources:
                   required: true
                   schema:
                     type: string
-                    minimum: 6
-                    maximum: 6
+                    minLength: 6
+                    maxLength: 6
               x-amazon-apigateway-integration:
-                httpMethod: get
+                httpMethod: post
                 type: aws_proxy
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfirmSignUpFunction.Arn}/invocations
-              x-amazon-apigateway-request-validator: ValidateRequestParameters
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
           /v1.0/auth:
             post:
               requestBody:
@@ -204,7 +204,7 @@ Resources:
                           minLength: 4
                         password:
                           type: string
-                          minimum: 8
+                          minLength: 8
                       required:
                         - username
                         - password
@@ -213,37 +213,10 @@ Resources:
                 type: aws_proxy
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AuthenticateFunction.Arn}/invocations
-              x-amazon-apigateway-request-validator: ValidateRequestBody
-          /v1.0/new_password_auth_challenge:
-            post:
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: object
-                      properties:
-                        username:
-                          type: string
-                          minLength: 4
-                        password:
-                          type: string
-                          minimum: 8
-                        session:
-                          type: string
-                          minimum: 36
-                      required:
-                        - username
-                        - password
-                        - session
-              x-amazon-apigateway-integration:
-                httpMethod: post
-                type: aws_proxy
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${NewPasswordAuthChallenge.Arn}/invocations
-              x-amazon-apigateway-request-validator: ValidateRequestBody
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+        components:
           requestValidators:
-            ValidateRequestBody:
+            ValidateBodyAndParams:
               validateRequestBody: true
               validateRequestParameters: true
 
