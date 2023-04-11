@@ -1,7 +1,6 @@
 from api_lib.auth.authorization import (
     authorize,
     Authorization,
-    UserGroup,
     ResourceAccess,
     ActionType,
 )
@@ -71,7 +70,6 @@ def update(api_request: ApiRequest):
 @api()
 @authorize(
     Authorization(
-        user_group=UserGroup.Admin,
         action_type=ActionType.Delete,
         resource_access=ResourceAccess.AccessUser,
     )
