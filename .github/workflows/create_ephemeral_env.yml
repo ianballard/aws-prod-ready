@@ -56,6 +56,6 @@ jobs:
             --s3-bucket "$SECONDARY_SAM_BUCKET" \
             --s3-prefix "${STAGE#*/}" \
             --no-fail-on-empty-changeset \
-            --parameter-overrides stage="${STAGE#*/} backupRegion="us-east-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableApiCDN="false"
+            --parameter-overrides stage="${STAGE#*/}" backupRegion="us-east-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableApiCDN="false"
       
       
