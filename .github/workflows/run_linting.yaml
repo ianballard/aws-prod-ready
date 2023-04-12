@@ -1,9 +1,9 @@
-name: Run Security Static Code Analysis
+name: Run Linting
 
 on: [push]
 
 jobs:
-  Run-security-static-code-analysis:
+  Run-linting:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,8 +18,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install bandit
+        pip install flake8
 
-    - name: Run Bandit
+    - name: Run Flake8
       run: |
-        bandit -r . --skip B101
+        flake8 .
