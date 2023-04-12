@@ -218,7 +218,7 @@ Resources:
 
   DBEventStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isPrimary
+    Condition: isPrimaryAndStorageEnabled
     Properties:
       TemplateURL: template.event.db.yaml
       Parameters:
@@ -228,7 +228,7 @@ Resources:
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
-        dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+        dbStreamArn: !If [ isPrimaryAndStorageEnabled, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
 
   AuthEventStack:
     Type: "AWS::CloudFormation::Stack"
