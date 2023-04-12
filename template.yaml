@@ -213,6 +213,7 @@ Resources:
 
   LogManagementStack:
     Type: "AWS::CloudFormation::Stack"
+    Condition: isPersistentStorageEnabled
     Properties:
       TemplateURL: template.logs.yaml
       Parameters:

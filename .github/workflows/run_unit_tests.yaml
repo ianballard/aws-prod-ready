@@ -1,0 +1,11 @@
+name: Run unit tests
+on: [push]
+jobs:
+  Run-unit-tests:
+    name: Run the units tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run Unit Tests
+        run: |
+          python -m pytest tests/unit -v
