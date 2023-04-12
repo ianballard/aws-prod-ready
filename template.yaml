@@ -26,7 +26,7 @@ Parameters:
       - 'secondary'
     Default: 'primary'
   enablePersistentStorage:
-    Description: "Enable Persistent Storage (true|false) true for long lived environments (dev, release, prod)  and false for ephemeral environments"
+    Description: "Enable Persistent Storage (true|false) true for long lived environments (dev, release, prod) and false for ephemeral environments"
     Type: String
     AllowedValues:
       - 'true'
@@ -87,8 +87,6 @@ Conditions:
   isAWSAuthEnabled: !Equals [ !Ref enableAWSAuth, 'true' ]
   isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
-  isVPCDisabled: !Equals [ !Ref enableVPC, 'false' ]
-  isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
   isPersistentStorageEnabled: !Equals [ !Ref enablePersistentStorage, 'true' ]
   isSecurityEnabled: !Equals [ !Ref enableSecurity, 'true' ]
   isPrimaryAndStorageEnabled: !And
@@ -106,35 +104,18 @@ Conditions:
 
 Resources:
 
-  DynamoDBStack:
+  SecurityStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isPrimaryAndStorageEnabled
+    Condition: isSecurityEnabled
     Properties:
-      TemplateURL: template.db.yaml
+      TemplateURL: template.security.yaml
       Parameters:
         stage: !Ref stage
+        stackType: !Ref stackType
         backupRegion: !Ref backupRegion
-        dbTableName: !Ref dbTableName
+        accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName
         enableBackup: !Ref enableBackup
 
-  AuthStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: isAWSAuthAndStorageEnabled
-    Properties:
-      TemplateURL: template.auth.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-
-#  OpenSearchStack:
-#    Type: "AWS::CloudFormation::Stack"
-#    Condition: isOpenSearchAndStorageEnabled
-#    Properties:
-#      TemplateURL: template.opensearch.yaml
-#      Parameters:
-#        stage: !Ref stage
-#        backupRegion: !Ref backupRegion
-#
   S3Stack:
     Type: "AWS::CloudFormation::Stack"
     Condition: isPersistentStorageEnabled
@@ -147,6 +128,61 @@ Resources:
         appId: !Ref appId
         enableS3Replication: !Ref enableS3Replication
         enableBackup: !Ref enableBackup
+
+  DynamoDBStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isPrimaryAndStorageEnabled
+    Properties:
+      TemplateURL: template.db.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        dbTableName: !Ref dbTableName
+        enableBackup: !Ref enableBackup
+
+  DataPipelineStack:
+    Condition: isPersistentStorageEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.data-pipeline.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        appId: !Ref appId
+        enableBackup: !Ref enableBackup
+        stackType: !Ref stackType
+
+  BackupDestinationVaultStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isSecondaryAndBackupEnabled
+    Properties:
+      TemplateURL: template.backup.yaml
+      Parameters:
+        stage: !Ref stage
+
+  VPCStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isVPCEnabled
+    Properties:
+      TemplateURL: template.vpc.yaml
+
+  AuthStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isAWSAuthAndStorageEnabled
+    Properties:
+      TemplateURL: template.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+
+  #  OpenSearchStack:
+  #    Type: "AWS::CloudFormation::Stack"
+  #    Condition: isOpenSearchAndStorageEnabled
+  #    Properties:
+  #      TemplateURL: template.opensearch.yaml
+  #      Parameters:
+  #        stage: !Ref stage
+  #        backupRegion: !Ref backupRegion
 
   CoreLibraryLayer:
     Type: AWS::Serverless::LayerVersion
@@ -168,64 +204,70 @@ Resources:
         - python3.9
       RetentionPolicy: Delete
 
-  VPCStack:
+  LogManagementStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isVPCEnabled
     Properties:
-      TemplateURL: template.vpc.yaml
+      TemplateURL: template.logs.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+
+  DBEventStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isPrimary
+    Properties:
+      TemplateURL: template.event.db.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+        dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+
+  AuthEventStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.event.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+
+  AuthApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.auth.yaml
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         coreLayer: !Ref CoreLibraryLayer
         apiLayer: !Ref ApiLibraryLayer
-        stackType: !Ref stackType
-        dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
 
-  NonVPCStack:
+  UserApiStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isVPCDisabled
     Properties:
-      TemplateURL: template.non-vpc.yaml
+      TemplateURL: template.api.user.yaml
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         coreLayer: !Ref CoreLibraryLayer
         apiLayer: !Ref ApiLibraryLayer
-        stackType: !Ref stackType
-        dbStreamArn: !If [ isPrimary, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
-
-  BackupDestinationVaultStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: isSecondaryAndBackupEnabled
-    Properties:
-      TemplateURL: template.backup.yaml
-      Parameters:
-       stage: !Ref stage
-
-  DataPipelineStack:
-    Condition: isPersistentStorageEnabled
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.data-pipeline.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-        appId: !Ref appId
-        enableBackup: !Ref enableBackup
-        stackType: !Ref stackType
-
-  SecurityStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: isSecurityEnabled
-    Properties:
-      TemplateURL: template.security.yaml
-      Parameters:
-        stage: !Ref stage
-        stackType: !Ref stackType
-        backupRegion: !Ref backupRegion
-        accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName
-        enableBackup: !Ref enableBackup

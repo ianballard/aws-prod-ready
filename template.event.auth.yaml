@@ -28,10 +28,6 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
-  dbTableName:
-    Description: "Table Name"
-    Type: String
-    Default: "DBTable"
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -83,7 +79,7 @@ Resources:
   AuthEventQueueUrlParameter:
     Type: "AWS::SSM::Parameter"
     Properties:
-      Name: !If [ isVPCEnabled, "AUTH_EVENT_QUEUE_URL_VPC", "AUTH_EVENT_QUEUE_URL_NO_VPC" ]
+      Name: !Sub 'AUTH_EVENT_QUEUE_URL-${stage}'
       Type: "String"
       Value: !GetAtt AuthEventQueue.QueueUrl
 

@@ -6,7 +6,6 @@ stack_name = "app-backend-secondary"
 s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-94dyevpzp9fu"
 s3_prefix = "app-backend-secondary"
 region = "us-west-2"
-profile = "ianballard"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 image_repositories = []
 confirm_changeset = false
