@@ -348,7 +348,7 @@ Outputs:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
   AuthApiCloudFrontDistributionUrl:
-    Value: !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ] ] ]
+    Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ] ] ], "" ]
     Description: URL of the CloudFront distribution
   SignUpFunctionArn:
     Description: "Sign Up Function ARN"
