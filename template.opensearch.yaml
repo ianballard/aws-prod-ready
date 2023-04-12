@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Open Search Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  enableOpensearch:
+    Description: "Enable Opensearch"
+    Type: String
+    Default: "true"
+
+Conditions:
+  ShouldCreateOpenSearch: !Equals [!Ref enableOpensearch, "true"]
+
+Resources:
+
+  OpenSearchKmsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: KMS key for OpenSearch domain encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow OpenSearch Service to Use the Key
+            Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: '*'
+
+  OpenSearchDomain:
+    Type: "AWS::OpenSearchService::Domain"
+    Condition: ShouldCreateOpenSearch
+    Properties:
+      EngineVersion: OpenSearch_2.3
+      ClusterConfig:
+        InstanceType: "t3.small.search"
+        InstanceCount: 1
+        DedicatedMasterEnabled: false
+#        ZoneAwarenessEnabled: true
+#        ZoneAwarenessConfig:
+#          AvailabilityZoneCount: 2
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: gp2
+        VolumeSize: 10
+      EncryptionAtRestOptions:
+        Enabled: true
+        KmsKeyId: !Ref OpenSearchKmsKey
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "es:*"
+            Resource: !Sub "arn:aws:es:*:${AWS::AccountId}:domain/*"
+      AdvancedSecurityOptions:
+        Enabled: true
+        SAMLOptions:
+          Enabled: false
+        InternalUserDatabaseEnabled: true
+        MasterUserOptions:
+          MasterUserName: "{{resolve:secretsmanager:opensearch-secret:SecretString:username}}"
+          MasterUserPassword: "{{resolve:secretsmanager:opensearch-secret:SecretString:password}}"
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+      LogPublishingOptions:
+        INDEX_SLOW_LOGS:
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupIndexSlow.Arn
+          Enabled: true
+        SEARCH_SLOW_LOGS:
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupSearchSlow.Arn
+          Enabled: true
+        AUDIT_LOGS:
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupAudit.Arn
+          Enabled: true
+        ES_APPLICATION_LOGS:
+          CloudWatchLogsLogGroupArn: !GetAtt LogGroupApplication.Arn
+          Enabled: true
+
+  LogGroupIndexSlow:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  LogGroupSearchSlow:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  LogGroupAudit:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  LogGroupApplication:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 365
+
+  OpenSearchLogsResourcePolicy:
+    Type: "AWS::Logs::ResourcePolicy"
+    Properties:
+      PolicyName: !Sub "OpenSearchLogsResourcePolicy--${stage}-${AWS::Region}"
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowOpenSearchToCreateLogStreams",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "es.amazonaws.com"
+              },
+              "Action":[
+                "logs:PutLogEvents",
+                "logs:CreateLogStream"
+              ],
+              "Resource": [
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupIndexSlow}:*",
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupSearchSlow}:*",
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupAudit}:*",
+                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupApplication}:*"
+              ]
+            }
+          ]
+        }
+
+Outputs:
+  OpenSearchDomainEndpoint:
+    Value: !GetAtt OpenSearchDomain.DomainEndpoint

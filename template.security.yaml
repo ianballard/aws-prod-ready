@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Security Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  accessLogBucket:
+    Description: "Access Log Bucket Name"
+    Type: String
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
+
+Resources:
+
+  EnableSecurityHub:
+    Type: 'AWS::SecurityHub::Hub'
+
+  EnableGuardDuty:
+    Type: 'AWS::GuardDuty::Detector'
+    Properties:
+      Enable: true
+
+  ConfigSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: !Sub "awsconfig-topic-${stage}-${AWS::Region}"
+
+  EnableConfig:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      Name: "default"
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+      RoleARN: !GetAtt ConfigServiceRole.Arn
+
+  ConfigServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "awsconfig-service-role-${stage}-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "AWSConfigServicePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "config:Put*"
+                  - "config:Get*"
+                  - "config:List*"
+                  - "config:Describe*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetBucketAcl"
+                Resource:
+                  - !Sub "arn:aws:s3:::${ConfigBucket}"
+                  - !Sub "arn:aws:s3:::${ConfigBucket}/*"
+              - Effect: "Allow"
+                Action:
+                  - "sns:Publish"
+                Resource: !Ref ConfigSNSTopic
+
+  ConfigDeliveryChannel:
+    Type: "AWS::Config::DeliveryChannel"
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: "TwentyFour_Hours"
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref ConfigSNSTopic
+
+  ConfigBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLogBucket
+        LogFilePrefix: 'config-access-logs/'
+
+  ConfigBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AWSConfigBucketPermissions"
+            Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}"
+          - Sid: "AWSConfigBucketDelivery"
+            Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+  CloudTrailBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLogBucket
+        LogFilePrefix: 'cloud-trail-access-logs/'
+
+  CloudTrailBucketPolicy:
+    Condition: isPrimary
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:Delete*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}'
+          - Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  TrailKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting CloudTrail logs
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow CloudTrail to use KMS key
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:DescribeKey
+            Resource: '*'
+
+  CloudTrail:
+    Condition: isPrimary
+    Type: 'AWS::CloudTrail::Trail'
+    Properties:
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      TrailName: 'GlobalCloudTrail'
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      KMSKeyId: !Ref TrailKmsKey
+      EventSelectors:
+        - DataResources:
+            - Type: "AWS::DynamoDB::Table"
+              Values: [ "arn:aws:dynamodb" ]
+            - Type: "AWS::S3::Object"
+              Values: [ "arn:aws:s3" ]
+          IncludeManagementEvents: true
+          ReadWriteType: All
+
+  CloudTrailBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "CloudTrailBackupVault-${stage}-${AWS::Region}"
+
+  CloudTrailBackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  CloudTrailBackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: CloudTrailBackupPlan
+        BackupPlanRule:
+          - RuleName: CloudTrailDailyBackupAndCopy
+            TargetBackupVault: !Ref CloudTrailBackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:CloudTrailBackupVault-${stage}-${backupRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref CloudTrailBackupPlan
+      BackupSelection:
+        SelectionName: CloudTrailBucketBackupSelection
+        IamRoleArn: !GetAtt CloudTrailBackupRole.Arn
+        Resources:
+          - !GetAtt CloudTrailBucket.Arn
+
+Outputs:
+  SecurityHubArn:
+    Description: "Security Hub ARN"
+    Value: !Ref EnableSecurityHub
+  GuardDutyDetectorId:
+    Description: "GuardDuty Detector ID"
+    Value: !Ref EnableGuardDuty
