@@ -64,9 +64,17 @@ Parameters:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
     Default: ''
+  enableApiCDN:
+    Description: "Is CDN for APIGW enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
 
 Resources:
 
@@ -218,6 +226,7 @@ Resources:
                 validateRequestParameters: true
 
   CloudFrontDistribution:
+    Condition: isApiCDNEnabled
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:

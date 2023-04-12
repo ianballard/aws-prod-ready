@@ -75,6 +75,13 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
+  enableApiCDN:
+    Description: "Is CDN for APIGW enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
   corsAllowedOrigins:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
@@ -256,6 +263,7 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableApiCDN: !Ref enableApiCDN
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -271,3 +279,4 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableApiCDN: !Ref enableApiCDN

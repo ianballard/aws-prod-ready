@@ -6,4 +6,3 @@ region = "us-east-2"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 image_repositories = []
 confirm_changeset = false
-parameter_overrides = "backupRegion=\"us-west-2\" enablePersistentStorage=\"false\" enableSecurity=\"false\" enableBackup=\"false\" enableVPC=\"false\""
