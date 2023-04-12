@@ -3,3 +3,4 @@ requests==2.25.1
 cryptography==39.0.2
 pydevd==2.9.5
 pytest==7.3.0
+aws-sam-cli==1.79.0
