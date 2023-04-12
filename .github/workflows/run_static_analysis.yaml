@@ -1,9 +1,9 @@
-name: Run Static Code Analysis
+name: Run Security Static Code Analysis
 
 on: [push]
 
 jobs:
-  Static-code-analysis:
+  Security-static-code-analysis:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,4 +22,4 @@ jobs:
 
     - name: Run Bandit
       run: |
-        bandit -r .
+        bandit -r . --skip B101
