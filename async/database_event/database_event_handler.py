@@ -51,7 +51,7 @@ def handle_db_event(event):
                 log_warning(f"missing entity_type_handler for entity: {entity_type}")
                 continue
 
-            entity_response = entity_type_handler(event_name, old_image, new_image)
+            entity_type_handler(event_name, old_image, new_image)
 
             put_firehose_record(event_name, old_image, new_image)
 
