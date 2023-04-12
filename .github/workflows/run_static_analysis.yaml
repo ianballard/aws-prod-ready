@@ -18,11 +18,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install bandit
 
-    - name: Run Snyk scan
-      uses: snyk/actions/python@0.3.0
-      with:
-        args: --all-projects
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    - name: Run Bandit
+      run: |
+        bandit -r .
