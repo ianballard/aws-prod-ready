@@ -3,7 +3,7 @@ name: Run Static Code Analysis
 on: [push]
 
 jobs:
-  Static Code Analysis:
+  Static-code-analysis:
     runs-on: ubuntu-latest
 
     steps:
