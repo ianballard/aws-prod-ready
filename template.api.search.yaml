@@ -1,0 +1,213 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Search API Stack
+
+Globals:
+  Api:
+    Auth:
+      DefaultAuthorizer: "PUBLIC"
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+        "BACKUP_REGION": !Ref backupRegion
+        "VPC_ENABLED": !Ref enableVPC
+        "CORS_ALLOWED_ORIGINS": !Ref corsAllowedOrigins
+    Layers:
+      - !Ref coreLayer
+      - !Ref apiLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  apiLayer:
+    Description: "API Library Layer"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
+  enableApiCDN:
+    Description: "Is CDN for APIGW enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
+
+Resources:
+
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Action: 'sts:AssumeRole'
+          Effect: Allow
+          Principal:
+            Service: apigateway.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaRole'
+
+  ApiCWLRoleArn:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
+
+  ApiGatewayApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayApiAccessLogGroup.Arn
+        Format: '{
+          "accountId": "$context.accountId",
+          "apiId": "$context.apiId",
+          "awsEndpointRequestId": "$context.awsEndpointRequestId",
+          "domainName": "$context.domainName",
+          "domainPrefix": "$context.domainPrefix",
+          "errorMessage": "$context.error.message",
+          "errorMessageString": "$context.error.messageString",
+          "errorResponseType": "$context.error.responseType",
+          "errorValidationErrorString": "$context.error.validationErrorString",
+          "extendedRequestId": "$context.extendedRequestId",
+          "httpMethod": "$context.httpMethod",
+          "identitySourceIp": "$context.identity.sourceIp",
+          "identityUserAgent": "$context.identity.userAgent",
+          "path": "$context.path",
+          "protocol": "$context.protocol",
+          "requestId": "$context.requestId",
+          "requestTime": "$context.requestTime",
+          "resourceId": "$context.resourceId",
+          "resourcePath": "$context.resourcePath",
+          "stage": "$context.stage",
+          "wafResponseCode": "$context.wafResponseCode",
+          "webaclArn": "$context.webaclArn"
+        }'
+      EndpointConfiguration:
+        Type: REGIONAL
+      StageName: Prod
+
+  CloudFrontDistribution:
+    Condition: isApiCDNEnabled
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${stage} Search APIGW'
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          DefaultTTL: 0
+          ForwardedValues:
+            Headers:
+              - Authorization
+              - User-Agent
+            QueryString: true
+          TargetOriginId: apigwOrigin
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+            DomainName: !Sub '${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com'
+            Id: apigwOrigin
+        PriceClass: PriceClass_100
+
+  # TODO update policies
+  SearchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/search/
+      Handler: search_controller.search
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonOpenSearchServiceFullAccess
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: "*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/search
+            Method: post
+
+Outputs:
+  SearchApiUrl:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  SearchApiCloudFrontDistributionUrl:
+    Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ] ] ], "" ]
+    Description: URL of the CloudFront distribution
+  SearchFunctionArn:
+    Description: "Sign Up Function ARN"
+    Value: !GetAtt SearchFunction.Arn

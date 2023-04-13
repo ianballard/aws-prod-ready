@@ -9,4 +9,4 @@ region = "us-east-2"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 image_repositories = []
 confirm_changeset = false
-parameter_overrides = "stage=\"development\" backupRegion=\"us-west-2\" dbTableName=\"DBTable\" appId=\"t52x7zk6ls6p\" enableS3Replication=\"true\" enableVPC=\"false\" enableSecurity=\"true\""
+parameter_overrides = "stage=\"development\" backupRegion=\"us-west-2\" dbTableName=\"DBTable\" appId=\"t52x7zk6ls6p\" enableS3Replication=\"true\" enableVPC=\"false\" enableSecurity=\"false\" enableOpenSearch=\"true\""

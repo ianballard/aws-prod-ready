@@ -182,15 +182,6 @@ Resources:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
 
-  #  OpenSearchStack:
-  #    Type: "AWS::CloudFormation::Stack"
-  #    Condition: isOpenSearchAndStorageEnabled
-  #    Properties:
-  #      TemplateURL: template.opensearch.yaml
-  #      Parameters:
-  #        stage: !Ref stage
-  #        backupRegion: !Ref backupRegion
-
   CoreLibraryLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -220,6 +211,18 @@ Resources:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
         coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+
+  OpenSearchStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isOpenSearchAndStorageEnabled
+    Properties:
+      TemplateURL: template.opensearch.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
@@ -281,3 +284,21 @@ Resources:
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
         enableApiCDN: !Ref enableApiCDN
+
+  SearchApiStack:
+    Condition: isOpenSearchEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.search.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref CoreLibraryLayer
+        apiLayer: !Ref ApiLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableApiCDN: !Ref enableApiCDN
+

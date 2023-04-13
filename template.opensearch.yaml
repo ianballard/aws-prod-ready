@@ -10,13 +10,24 @@ Parameters:
   backupRegion:
     Description: "Backup Region"
     Type: String
-  enableOpensearch:
-    Description: "Enable Opensearch"
+  securityGroup:
+    Description: "Lambda VPC security group"
     Type: String
-    Default: "true"
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
 
 Conditions:
-  ShouldCreateOpenSearch: !Equals [!Ref enableOpensearch, "true"]
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
 
 Resources:
 
@@ -48,7 +59,6 @@ Resources:
 
   OpenSearchDomain:
     Type: "AWS::OpenSearchService::Domain"
-    Condition: ShouldCreateOpenSearch
     Properties:
       EngineVersion: OpenSearch_2.3
       ClusterConfig:
@@ -86,6 +96,12 @@ Resources:
           MasterUserPassword: "{{resolve:secretsmanager:opensearch-secret:SecretString:password}}"
       DomainEndpointOptions:
         EnforceHTTPS: true
+      VPCOptions: !If
+        - isVPCEnabled
+        - SecurityGroupIds:
+            - !Ref securityGroup
+          SubnetIds: !Ref vpcSubnetIds
+        - !Ref AWS::NoValue
       LogPublishingOptions:
         INDEX_SLOW_LOGS:
           CloudWatchLogsLogGroupArn: !GetAtt LogGroupIndexSlow.Arn
@@ -147,6 +163,13 @@ Resources:
             }
           ]
         }
+
+  DomainUrlParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "OPEN_SEARCH_DOMAIN_URL"
+      Type: "String"
+      Value: !GetAtt OpenSearchDomain.DomainEndpoint
 
 Outputs:
   OpenSearchDomainEndpoint:
