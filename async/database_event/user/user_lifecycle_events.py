@@ -29,4 +29,4 @@ EVENT_TYPES = {"INSERT": user_inserted, "MODIFY": user_modified, "REMOVE": user_
 
 
 def is_search_enabled():
-    return os.getenv('SEARCH_ENABLED') == 'true'
+    return os.getenv("SEARCH_ENABLED") == "true"
