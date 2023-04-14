@@ -226,6 +226,7 @@ Resources:
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
+        coreLayer: !Ref CoreLibraryLayer
 
   DBEventStack:
     Type: "AWS::CloudFormation::Stack"

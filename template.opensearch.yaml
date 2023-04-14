@@ -25,9 +25,30 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+
+Globals:
+  Function:
+    MemorySize: 256
+    Timeout: 900
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+    Layers:
+      - !Ref coreLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
 
 Resources:
 
@@ -90,10 +111,9 @@ Resources:
         Enabled: true
         SAMLOptions:
           Enabled: false
-        InternalUserDatabaseEnabled: true
+        InternalUserDatabaseEnabled: false
         MasterUserOptions:
-          MasterUserName: "{{resolve:secretsmanager:opensearch-secret:SecretString:username}}"
-          MasterUserPassword: "{{resolve:secretsmanager:opensearch-secret:SecretString:password}}"
+          MasterUserARN: !GetAtt OpenSearchAdminIAMRole.Arn
       DomainEndpointOptions:
         EnforceHTTPS: true
       VPCOptions: !If
@@ -170,6 +190,45 @@ Resources:
       Name: "OPEN_SEARCH_DOMAIN_URL"
       Type: "String"
       Value: !GetAtt OpenSearchDomain.DomainEndpoint
+
+  OpenSearchAdminIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonOpenSearchServiceFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  SearchAdminAssignAccessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/search_admin
+      Role: !GetAtt OpenSearchAdminIAMRole.Arn
+      Handler: search_admin_functions.assign_readall_and_monitor_role
+
+  SearchAdminAssignEnableLoggingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/search_admin
+      Role: !GetAtt OpenSearchAdminIAMRole.Arn
+      Handler: search_admin_functions.enable_audit_logs
+
+  SearchAdminAssignCreateUserIndexFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/search_admin
+      Role: !GetAtt OpenSearchAdminIAMRole.Arn
+      Handler: search_admin_functions.create_user_index
 
 Outputs:
   OpenSearchDomainEndpoint:
