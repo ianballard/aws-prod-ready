@@ -31,6 +31,13 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  enableOpenSearch:
+    Description: "Enable Open Search (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -44,6 +51,7 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
+        "SEARCH_ENABLED": !Ref enableOpenSearch
     Layers:
       - !Ref coreLayer
     VpcConfig: !If

@@ -240,6 +240,7 @@ Resources:
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
         dbStreamArn: !If [ isPrimaryAndStorageEnabled, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
+        enableOpenSearch: !Ref enableOpenSearch
 
   AuthEventStack:
     Type: "AWS::CloudFormation::Stack"

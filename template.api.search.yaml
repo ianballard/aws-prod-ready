@@ -179,11 +179,11 @@ Resources:
         PriceClass: PriceClass_100
 
   # TODO update policies
-  SearchFunction:
+  SearchUsersFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/search/
-      Handler: search_controller.search
+      Handler: search_controller.search_users
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - AmazonSSMReadOnlyAccess
@@ -198,7 +198,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGatewayApi
-            Path: /v1.0/search
+            Path: /v1.0/search/user
             Method: post
 
 Outputs:
@@ -208,6 +208,6 @@ Outputs:
   SearchApiCloudFrontDistributionUrl:
     Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ] ] ], "" ]
     Description: URL of the CloudFront distribution
-  SearchFunctionArn:
-    Description: "Sign Up Function ARN"
-    Value: !GetAtt SearchFunction.Arn
+  SearchUsersFunctionArn:
+    Description: "SearchUsersFunction ARN"
+    Value: !GetAtt SearchUsersFunction.Arn

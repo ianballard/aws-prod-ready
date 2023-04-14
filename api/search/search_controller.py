@@ -6,9 +6,12 @@ from core_lib.utils.lambda_util import lambda_handler
 
 @lambda_handler()
 @api()
-def search(api_request: ApiRequest):
+def search_users(api_request: ApiRequest):
+
+    search_str = api_request.body.get('search_str')
+
     return ApiResponse(
         request_headers=api_request.headers,
-        status_code=201,
-        response_body=search_service.get_client_info(),
+        status_code=200,
+        response_body=search_service.search_users(search_str=search_str),
     ).format()
