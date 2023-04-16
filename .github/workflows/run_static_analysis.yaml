@@ -22,4 +22,4 @@ jobs:
 
     - name: Run Bandit
       run: |
-        bandit -r . --skip B101 B113
+        bandit -r . --skip B101,B113
