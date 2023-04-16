@@ -13,9 +13,6 @@ Parameters:
   coreLayer:
     Description: "Core Library Layer"
     Type: String
-  dbStreamArn:
-    Description: "DB Stream ARN"
-    Type: String
   securityGroup:
     Description: "Lambda VPC security group"
     Type: String
@@ -38,6 +35,10 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  dbTableName:
+    Description: "DB Table Name"
+    Type: String
+    Default: ''
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -77,12 +78,25 @@ Resources:
         - AmazonKinesisFirehoseFullAccess
       Handler: database_event_handler.handle_db_event
       Timeout: 900
-      Events:
-        DBStreamEvent:
-          Type: DynamoDB
-          Properties:
-            Stream: !Ref dbStreamArn
-            StartingPosition: LATEST
-            BatchSize: 5
-            MaximumBatchingWindowInSeconds: 5
-            Enabled: true
+      Tags:
+        function_role: search_write_function
+
+  CreateDBStreamEventTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/database_event
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonDynamoDBFullAccess
+        - AWSLambda_FullAccess
+        - AmazonSSMReadOnlyAccess
+      Handler: db_admin_functions.create_trigger
+      Environment:
+        Variables:
+          "DBStreamHandlerFunctionArn": !GetAtt DBStream.Arn
+
+  ExecuteCreateDBStreamEventTriggerFunction:
+    Type: Custom::ExecuteCreateDBStreamEventTriggerFunction
+    Properties:
+      ServiceToken: !GetAtt CreateDBStreamEventTriggerFunction.Arn
+      DBStreamHandlerFunctionArn: !GetAtt DBStream.Arn

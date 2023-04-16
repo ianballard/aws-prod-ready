@@ -117,22 +117,6 @@ Resources:
               SSEAlgorithm: 'aws:kms'
       VersioningConfiguration:
         Status: Enabled
-      ReplicationConfiguration: !If
-        - isS3ReplicationEnabled
-        - Role: !GetAtt S3ReplicationRole.Arn
-          Rules:
-            - Id: 'AccessLogsToSecondaryAccessLogsReplication'
-              Status: Enabled
-              Destination:
-                Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-access-log-bucket", !Sub "arn:aws:s3:::${appId}-${stage}-primary-access-log-bucket" ]
-                StorageClass: STANDARD
-                EncryptionConfiguration:
-                  ReplicaKmsKeyID: !Sub "arn:aws:kms:${backupRegion}:${AWS::AccountId}:alias/aws/s3"
-              Prefix: ''
-              SourceSelectionCriteria:
-                SseKmsEncryptedObjects:
-                  Status: Enabled
-        - !Ref AWS::NoValue
 
   LogBucketPolicy:
     Type: AWS::S3::BucketPolicy

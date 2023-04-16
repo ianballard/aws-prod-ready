@@ -20,14 +20,26 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
 
 Conditions:
   isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
 
 Resources:
 
   DBTable:
     Type: AWS::DynamoDB::GlobalTable
+    Condition: isPrimary
     Properties:
       TableName: !Sub '${dbTableName}-${stage}'
       AttributeDefinitions:
@@ -84,13 +96,13 @@ Resources:
       Value: !Sub '${dbTableName}-${stage}'
 
   DynamoDBBackupVault:
-    Condition: isBackupEnabled
+    Condition: isPrimaryAndBackupEnabled
     Type: 'AWS::Backup::BackupVault'
     Properties:
       BackupVaultName:  !Sub "DynamoDBBackupVault-${stage}-${AWS::Region}"
 
   DynamoDBBackupRole:
-    Condition: isBackupEnabled
+    Condition: isPrimaryAndBackupEnabled
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
@@ -104,7 +116,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
 
   DynamoDBBackupPlan:
-    Condition: isBackupEnabled
+    Condition: isPrimaryAndBackupEnabled
     Type: 'AWS::Backup::BackupPlan'
     Properties:
       BackupPlan:
@@ -123,7 +135,7 @@ Resources:
                   DeleteAfterDays: 60
 
   BackupSelection:
-    Condition: isBackupEnabled
+    Condition: isPrimaryAndBackupEnabled
     Type: 'AWS::Backup::BackupSelection'
     Properties:
       BackupPlanId: !Ref DynamoDBBackupPlan
@@ -134,7 +146,9 @@ Resources:
           - !GetAtt DBTable.Arn
 
 Outputs:
+  TableName:
+    Value: !If [ isPrimary, !Ref DBTable, !Sub '${dbTableName}-${stage}' ]
   TableArn:
-    Value: !GetAtt DBTable.Arn
+    Value: !If [ isPrimary, !GetAtt DBTable.Arn, "" ]
   TableStreamArn:
-    Value: !GetAtt DBTable.StreamArn
+    Value: !If [ isPrimary, !GetAtt DBTable.StreamArn, "" ]

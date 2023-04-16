@@ -39,59 +39,6 @@ Conditions:
 
 Resources:
 
-  S3ReplicationRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: 's3.amazonaws.com'
-            Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyName: 'S3ReplicationPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetReplicationConfiguration
-                  - s3:ListBucket
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersion
-                  - s3:GetObjectVersionAcl
-                  - s3:GetObjectVersionTagging
-                  - s3:GetObjectVersionForReplication
-                  - s3:GetObjectVersionTorrent
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - s3:ListBucket
-                  - s3:GetBucketVersioning
-                  - s3:GetBucketLocation
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                  - s3:ObjectOwnerOverrideToBucketOwner
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - kms:Encrypt
-                  - kms:ReEncrypt*
-                  - kms:GenerateDataKey*
-                  - kms:DescribeKey
-                Resource: '*'
-
   DataPipelineDestinationS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -114,7 +61,6 @@ Resources:
         LogFilePrefix: 'data-pipeline-access-logs/'
 
   FirehoseDeliveryRole:
-    Condition: isPrimary
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -144,7 +90,6 @@ Resources:
                   - !Sub "arn:aws:s3:::${DataPipelineDestinationS3Bucket}/*"
 
   FirehoseDeliveryStream:
-    Condition: isPrimary
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
       ExtendedS3DestinationConfiguration:
@@ -165,19 +110,16 @@ Resources:
             AWSKMSKeyARN: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/s3"
 
   FirehoseDeliveryStreamS3LogGroup:
-    Condition: isPrimary
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
 
   FirehoseDeliveryStreamS3LogStream:
-    Condition: isPrimary
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref FirehoseDeliveryStreamS3LogGroup
       LogStreamName: 'FirehoseDeliveryStreamS3LogStream'
 
   FirehoseDeliveryStreamParameter:
-    Condition: isPrimary
     Type: "AWS::SSM::Parameter"
     Properties:
       Name: "FIREHOSE_DELIVERY_STREAM"

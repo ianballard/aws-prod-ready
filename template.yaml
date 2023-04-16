@@ -138,7 +138,7 @@ Resources:
 
   DynamoDBStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isPrimaryAndStorageEnabled
+    Condition: isPersistentStorageEnabled
     Properties:
       TemplateURL: template.db.yaml
       Parameters:
@@ -146,6 +146,7 @@ Resources:
         backupRegion: !Ref backupRegion
         dbTableName: !Ref dbTableName
         enableBackup: !Ref enableBackup
+        stackType: !Ref stackType
 
   DataPipelineStack:
     Condition: isPersistentStorageEnabled
@@ -230,7 +231,6 @@ Resources:
 
   DBEventStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: isPrimaryAndStorageEnabled
     Properties:
       TemplateURL: template.event.db.yaml
       Parameters:
@@ -240,8 +240,8 @@ Resources:
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
-        dbStreamArn: !If [ isPrimaryAndStorageEnabled, !GetAtt DynamoDBStack.Outputs.TableStreamArn, "" ]
         enableOpenSearch: !Ref enableOpenSearch
+        dbTableName: !If [ isPrimaryAndStorageEnabled, !GetAtt DynamoDBStack.Outputs.TableName, "" ]
 
   AuthEventStack:
     Type: "AWS::CloudFormation::Stack"

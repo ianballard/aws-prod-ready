@@ -35,7 +35,7 @@ Conditions:
 Globals:
   Function:
     MemorySize: 256
-    Timeout: 900
+    Timeout: 60
     Runtime: python3.9
     Environment:
       Variables:
@@ -159,7 +159,7 @@ Resources:
   OpenSearchLogsResourcePolicy:
     Type: "AWS::Logs::ResourcePolicy"
     Properties:
-      PolicyName: !Sub "OpenSearchLogsResourcePolicy--${stage}-${AWS::Region}"
+      PolicyName: !Sub "OpenSearchLogsResourcePolicy-${stage}-${AWS::Region}"
       PolicyDocument: !Sub |
         {
           "Version": "2012-10-17",
@@ -191,6 +191,13 @@ Resources:
       Type: "String"
       Value: !GetAtt OpenSearchDomain.DomainEndpoint
 
+  DomainNameParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "OPEN_SEARCH_DOMAIN_NAME"
+      Type: "String"
+      Value: !Ref OpenSearchDomain
+
   OpenSearchAdminIAMRole:
     Type: AWS::IAM::Role
     Properties:
@@ -207,28 +214,67 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
         - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonOpenSearchServiceFullAccess
+        - arn:aws:iam::aws:policy/AWSLambda_FullAccess
+        - arn:aws:iam::aws:policy/ResourceGroupsandTagEditorReadOnlyAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  SearchAdminAssignAccessFunction:
+  SearchAdminAssignReadAccessFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./async/search_admin
       Role: !GetAtt OpenSearchAdminIAMRole.Arn
-      Handler: search_admin_functions.assign_readall_and_monitor_role
+      Handler: search_admin_functions.assign_read_access
+      Tags:
+        function_role: search_write_function
 
-  SearchAdminAssignEnableLoggingFunction:
+  ExecuteSearchAdminAssignReadAccessFunction:
+    Type: Custom::ExecuteSearchAdminAssignReadAccessFunction
+    Properties:
+      ServiceToken: !GetAtt SearchAdminAssignReadAccessFunction.Arn
+      OpenSearchClusterArn: !GetAtt OpenSearchDomain.Arn
+
+  SearchAdminAssignWriteAccessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/search_admin
+      Role: !GetAtt OpenSearchAdminIAMRole.Arn
+      Handler: search_admin_functions.assign_write_access
+      Tags:
+        function_role: search_write_function
+
+  ExecuteSearchAdminAssignWriteAccessFunction:
+    Type: Custom::ExecuteSearchAdminAssignWriteAccessFunction
+    Properties:
+      ServiceToken: !GetAtt SearchAdminAssignWriteAccessFunction.Arn
+      OpenSearchClusterArn: !GetAtt OpenSearchDomain.Arn
+
+  SearchAdminEnableLoggingFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./async/search_admin
       Role: !GetAtt OpenSearchAdminIAMRole.Arn
       Handler: search_admin_functions.enable_audit_logs
+      Tags:
+        function_role: search_write_function
 
-  SearchAdminAssignCreateUserIndexFunction:
+  ExecuteSearchAdminEnableLoggingFunction:
+    Type: Custom::ExecuteSearchAdminEnableLoggingFunction
+    Properties:
+      ServiceToken: !GetAtt SearchAdminEnableLoggingFunction.Arn
+      OpenSearchClusterArn: !GetAtt OpenSearchDomain.Arn
+
+  SearchAdminCreateUserIndexFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./async/search_admin
       Role: !GetAtt OpenSearchAdminIAMRole.Arn
       Handler: search_admin_functions.create_user_index
+
+  ExecuteSearchAdminCreateUserIndexFunction:
+    Type: Custom::ExecuteSearchAdminCreateUserIndexFunction
+    Properties:
+      ServiceToken: !GetAtt SearchAdminCreateUserIndexFunction.Arn
+      OpenSearchClusterArn: !GetAtt OpenSearchDomain.Arn
 
 Outputs:
   OpenSearchDomainEndpoint:

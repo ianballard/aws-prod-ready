@@ -188,11 +188,8 @@ Resources:
         - AWSLambdaVPCAccessExecutionRole
         - AmazonSSMReadOnlyAccess
         - AmazonOpenSearchServiceFullAccess
-        - Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-              Resource: "*"
+      Tags:
+        function_role: search_read_function
       Events:
         ApiEvent:
           Type: Api
