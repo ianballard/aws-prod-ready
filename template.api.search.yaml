@@ -104,6 +104,18 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
+        - Name: SearchAPIRateLimit
+          Priority: 1
+          Action:
+            Block: { }
+          Statement:
+            RateBasedStatement:
+              Limit: 300
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: SearchAPIRateLimitMetric
+            SampledRequestsEnabled: true
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -139,6 +151,7 @@ Resources:
   ApiGatewayApi:
     Type: AWS::Serverless::Api
     Properties:
+      Description: "Search API"
       AccessLogSetting:
         DestinationArn: !GetAtt ApiGatewayApiAccessLogGroup.Arn
         Format: '{

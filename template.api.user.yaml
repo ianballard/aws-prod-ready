@@ -103,6 +103,18 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
+        - Name: UserAPIRateLimit
+          Priority: 1
+          Action:
+            Block: { }
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: UserAPIRateLimitMetric
+            SampledRequestsEnabled: true
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -138,6 +150,7 @@ Resources:
   ApiGatewayApi:
     Type: AWS::Serverless::Api
     Properties:
+      Description: "User API"
       AccessLogSetting:
         DestinationArn: !GetAtt ApiGatewayApiAccessLogGroup.Arn
         Format: '{
