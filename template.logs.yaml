@@ -85,7 +85,7 @@ Resources:
           Type: Schedule
           Properties:
             Enabled: True
-            Schedule: cron(0/5 * * * ? *)
+            Schedule: cron(5/10 * * * ? *)
 
   UpdateManagedErrorLogGroups:
     Type: AWS::Serverless::Function
@@ -104,4 +104,4 @@ Resources:
           Type: Schedule
           Properties:
             Enabled: True
-            Schedule: cron(0/5 * * * ? *)
+            Schedule: cron(*/10 * * * ? *)

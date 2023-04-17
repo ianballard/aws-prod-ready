@@ -79,6 +79,38 @@ Conditions:
 
 Resources:
 
+  WebACLWithAMR:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "AuthWebACLWithAMR-${stage}"
+      Scope: REGIONAL
+      Description: Web ACL with AWS Managed Rules
+      DefaultAction:
+        Allow: { }
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "AuthMetricForWebACLWithAMR-${stage}"
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 0
+          OverrideAction:
+            None: { }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "AuthMetricForAMRCRS-${stage}"
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayApi}/stages/Prod
+
   CloudWatchRole:
     Type: AWS::IAM::Role
     DeletionPolicy: Retain
