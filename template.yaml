@@ -255,10 +255,10 @@ Resources:
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
 
-  AuthApiStack:
+  ApiStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
-      TemplateURL: template.api.auth.yaml
+      TemplateURL: template.api.yaml
       Parameters:
         stage: !Ref stage
         backupRegion: !Ref backupRegion
@@ -270,37 +270,6 @@ Resources:
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
         enableApiCDN: !Ref enableApiCDN
-
-  UserApiStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.api.user.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-        coreLayer: !Ref CoreLibraryLayer
-        apiLayer: !Ref ApiLibraryLayer
-        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
-        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
-        enableVPC: !Ref enableVPC
-        dbTableName: !Ref dbTableName
-        corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableApiCDN: !Ref enableApiCDN
-
-  SearchApiStack:
-    Condition: isOpenSearchEnabled
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL: template.api.search.yaml
-      Parameters:
-        stage: !Ref stage
-        backupRegion: !Ref backupRegion
-        coreLayer: !Ref CoreLibraryLayer
-        apiLayer: !Ref ApiLibraryLayer
-        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
-        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
-        enableVPC: !Ref enableVPC
-        dbTableName: !Ref dbTableName
-        corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableApiCDN: !Ref enableApiCDN
-
+        enableOpenSearch: !Ref enableOpenSearch
+        stackType: !Ref stackType
+        appId: !Ref appId

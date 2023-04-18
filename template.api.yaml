@@ -1,0 +1,255 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  API Stack
+
+Globals:
+  Api:
+    Auth:
+      DefaultAuthorizer: "PUBLIC"
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+        "BACKUP_REGION": !Ref backupRegion
+        "VPC_ENABLED": !Ref enableVPC
+        "CORS_ALLOWED_ORIGINS": !Ref corsAllowedOrigins
+    Layers:
+      - !Ref coreLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  backupRegion:
+    Description: "Backup Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  apiLayer:
+    Description: "API Library Layer"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: String
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
+  enableApiCDN:
+    Description: "Is CDN for APIGW enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  enableOpenSearch:
+    Description: "Enable Open Search (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+    Default: "abc123abc123"
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
+
+Resources:
+
+  ApiDefinitionStorage:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'api-definition-access-logs/'
+
+  ManageApiExportsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/api_admin
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonS3FullAccess
+        - AmazonAPIGatewayAdministrator
+      Handler: api_admin_functions.manage_api_exports
+
+  WebACLWithAMR:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      Description: Web ACL with AWS Managed Rules
+      DefaultAction:
+        Allow: { }
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "MetricForWebACLWithAMR-${stage}"
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 0
+          OverrideAction:
+            None: { }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "MetricForAMRCRS-${stage}"
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+        - Name: APIRateLimit
+          Priority: 1
+          Action:
+            Block: { }
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: APIRateLimitMetric
+            SampledRequestsEnabled: true
+
+  AuthApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref coreLayer
+        apiLayer: !Ref apiLayer
+        securityGroup: !Ref securityGroup
+        vpcSubnetIds: !Ref vpcSubnetIds
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableApiCDN: !Ref enableApiCDN
+
+  AuthWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${AuthApiStack.Outputs.ApiId}/stages/Prod
+
+  ExecuteManageAuthApiExportsFunction:
+    Type: Custom::ExecuteManageAuthApiExportsFunction
+    Properties:
+      ServiceToken: !GetAtt ManageApiExportsFunction.Arn
+      ApiId: !GetAtt AuthApiStack.Outputs.ApiId
+      BucketName: !Ref ApiDefinitionStorage
+
+  UserApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.user.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref coreLayer
+        apiLayer: !Ref apiLayer
+        securityGroup: !Ref securityGroup
+        vpcSubnetIds: !Ref vpcSubnetIds
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableApiCDN: !Ref enableApiCDN
+
+  UserWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${UserApiStack.Outputs.ApiId}/stages/Prod
+
+  ExecuteManageUserApiExportsFunction:
+    Type: Custom::ExecuteManageUserApiExportsFunction
+    Properties:
+      ServiceToken: !GetAtt ManageApiExportsFunction.Arn
+      ApiId: !GetAtt UserApiStack.Outputs.ApiId
+      BucketName: !Ref ApiDefinitionStorage
+
+  SearchApiStack:
+    Condition: isOpenSearchEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.search.yaml
+      Parameters:
+        stage: !Ref stage
+        backupRegion: !Ref backupRegion
+        coreLayer: !Ref coreLayer
+        apiLayer: !Ref apiLayer
+        securityGroup: !Ref securityGroup
+        vpcSubnetIds: !Ref vpcSubnetIds
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableApiCDN: !Ref enableApiCDN
+
+  SearchWebACLAssociation:
+    Condition: isOpenSearchEnabled
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${SearchApiStack.Outputs.ApiId}/stages/Prod
+
+  ExecuteManageSearchApiExportsFunction:
+    Condition: isOpenSearchEnabled
+    Type: Custom::ExecuteManageSearchApiExportsFunction
+    Properties:
+      ServiceToken: !GetAtt ManageApiExportsFunction.Arn
+      ApiId: !GetAtt SearchApiStack.Outputs.ApiId
+      BucketName: !Ref ApiDefinitionStorage

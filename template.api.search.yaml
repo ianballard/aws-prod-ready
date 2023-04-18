@@ -79,50 +79,6 @@ Conditions:
 
 Resources:
 
-  WebACLWithAMR:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub "SearchWebACLWithAMR-${stage}"
-      Scope: REGIONAL
-      Description: Web ACL with AWS Managed Rules
-      DefaultAction:
-        Allow: { }
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub "SearchMetricForWebACLWithAMR-${stage}"
-      Rules:
-        - Name: AWS-AWSManagedRulesCommonRuleSet
-          Priority: 0
-          OverrideAction:
-            None: { }
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: !Sub "SearchMetricForAMRCRS-${stage}"
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-        - Name: SearchAPIRateLimit
-          Priority: 1
-          Action:
-            Block: { }
-          Statement:
-            RateBasedStatement:
-              Limit: 300
-              AggregateKeyType: IP
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: SearchAPIRateLimitMetric
-            SampledRequestsEnabled: true
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      WebACLArn: !GetAtt WebACLWithAMR.Arn
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayApi}/stages/Prod
-
   CloudWatchRole:
     Type: AWS::IAM::Role
     DeletionPolicy: Retain
@@ -272,6 +228,9 @@ Resources:
             Method: post
 
 Outputs:
+  ApiId:
+    Description: "API Gateway Id"
+    Value: !Ref ApiGatewayApi
   SearchApiUrl:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"

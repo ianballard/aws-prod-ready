@@ -79,50 +79,6 @@ Conditions:
 
 Resources:
 
-  WebACLWithAMR:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub "AuthWebACLWithAMR-${stage}"
-      Scope: REGIONAL
-      Description: Web ACL with AWS Managed Rules
-      DefaultAction:
-        Allow: { }
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub "AuthMetricForWebACLWithAMR-${stage}"
-      Rules:
-        - Name: AWS-AWSManagedRulesCommonRuleSet
-          Priority: 0
-          OverrideAction:
-            None: { }
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: !Sub "AuthMetricForAMRCRS-${stage}"
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-        - Name: AuthAPIRateLimit
-          Priority: 1
-          Action:
-            Block: { }
-          Statement:
-            RateBasedStatement:
-              Limit: 100
-              AggregateKeyType: IP
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: AuthAPIRateLimitMetric
-            SampledRequestsEnabled: true
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      WebACLArn: !GetAtt WebACLWithAMR.Arn
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayApi}/stages/Prod
-
   CloudWatchRole:
     Type: AWS::IAM::Role
     DeletionPolicy: Retain
@@ -370,25 +326,10 @@ Resources:
             Path: /v1.0/confirm_sign_up
             Method: get
 
-  NewPasswordAuthChallenge:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: api/auth/
-      Handler: auth_controller.new_password_auth_challenge
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AmazonSQSFullAccess
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGatewayApi
-            Path: /v1.0/new_password_auth_challenge
-            Method: post
-
 Outputs:
+  ApiId:
+    Description: "API Gateway Id"
+    Value: !Ref ApiGatewayApi
   AuthApiUrl:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
