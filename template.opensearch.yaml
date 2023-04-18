@@ -41,6 +41,7 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
+    Tracing: Active
     Layers:
       - !Ref coreLayer
     VpcConfig: !If
@@ -216,6 +217,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonOpenSearchServiceFullAccess
         - arn:aws:iam::aws:policy/AWSLambda_FullAccess
         - arn:aws:iam::aws:policy/ResourceGroupsandTagEditorReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   SearchAdminAssignReadAccessFunction:

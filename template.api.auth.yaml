@@ -11,6 +11,7 @@ Globals:
     MemorySize: 256
     Timeout: 30
     Runtime: python3.9
+    Tracing: Active
     Environment:
       Variables:
         "stage": !Ref "stage"
@@ -281,6 +282,7 @@ Resources:
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
         - AmazonDynamoDBFullAccess
+        - AWSXRayDaemonWriteAccess
       Events:
         ApiEvent:
           Type: Api
@@ -300,6 +302,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
+        - AWSXRayDaemonWriteAccess
       Events:
         ApiEvent:
           Type: Api
@@ -318,6 +321,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
+        - AWSXRayDaemonWriteAccess
       Events:
         ApiEvent:
           Type: Api

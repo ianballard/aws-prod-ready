@@ -11,6 +11,7 @@ Globals:
     MemorySize: 256
     Timeout: 30
     Runtime: python3.9
+    Tracing: Active
     Environment:
       Variables:
         "stage": !Ref "stage"
@@ -125,6 +126,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonS3FullAccess
         - AmazonAPIGatewayAdministrator
+        - AWSXRayDaemonWriteAccess
       Handler: api_admin_functions.manage_api_exports
 
   WebACLWithAMR:

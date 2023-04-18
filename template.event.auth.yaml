@@ -37,6 +37,7 @@ Globals:
     MemorySize: 256
     Timeout: 30
     Runtime: python3.9
+    Tracing: Active
     Environment:
       Variables:
         "stage": !Ref "stage"
@@ -61,6 +62,7 @@ Resources:
         - AmazonSSMReadOnlyAccess
         - AmazonCognitoPowerUser
         - AmazonSQSFullAccess
+        - AWSXRayDaemonWriteAccess
         - SQSPollerPolicy:
             QueueName: !GetAtt AuthEventQueue.QueueName
       Handler: auth_event_handler.handle_auth_event

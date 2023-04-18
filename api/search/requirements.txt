@@ -3,3 +3,4 @@ requests==2.25.1
 cryptography==39.0.2
 opensearch-py==2.2.0
 requests-aws4auth==1.2.2
+aws-xray-sdk==0.96

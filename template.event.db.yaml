@@ -48,6 +48,7 @@ Globals:
     MemorySize: 256
     Timeout: 30
     Runtime: python3.9
+    Tracing: Active
     Environment:
       Variables:
         "stage": !Ref "stage"
@@ -76,6 +77,7 @@ Resources:
         - AmazonDynamoDBFullAccess
         - AmazonSQSFullAccess
         - AmazonKinesisFirehoseFullAccess
+        - AWSXRayDaemonWriteAccess
       Handler: database_event_handler.handle_db_event
       Timeout: 900
       Tags:
@@ -90,6 +92,7 @@ Resources:
         - AmazonDynamoDBFullAccess
         - AWSLambda_FullAccess
         - AmazonSSMReadOnlyAccess
+        - AWSXRayDaemonWriteAccess
       Handler: db_admin_functions.create_trigger
       Environment:
         Variables:
