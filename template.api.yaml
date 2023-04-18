@@ -106,16 +106,60 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              KMSMasterKeyID: 'alias/aws/s3'
-              SSEAlgorithm: 'aws:kms'
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
         LogFilePrefix: 'api-definition-access-logs/'
+
+  S3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ApiDefinitionStorage
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${ApiDefinitionStorage}/*'
+
+  CloudFrontOAI:
+    Type: 'AWS::CloudFront::CloudFrontOriginAccessIdentity'
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: 'OAI for S3 bucket access'
+
+  CloudFrontDistribution:
+    Type: 'AWS::CloudFront::Distribution'
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: 'CloudFront Distribution for S3 bucket'
+        DefaultRootObject: 'index.html'
+        Origins:
+          - DomainName: !GetAtt ApiDefinitionStorage.DomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: 'redirect-to-https'
+          AllowedMethods:
+            - 'GET'
+            - 'HEAD'
+            - 'OPTIONS'
+          CachedMethods:
+            - 'GET'
+            - 'HEAD'
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: 'none'
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
 
   ManageApiExportsFunction:
     Type: AWS::Serverless::Function
