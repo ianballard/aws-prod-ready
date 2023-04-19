@@ -18,7 +18,7 @@ Globals:
         "region": !Ref AWS::Region
         "BACKUP_REGION": !Ref backupRegion
         "VPC_ENABLED": !Ref enableVPC
-        "CORS_ALLOWED_ORIGINS": !Ref corsAllowedOrigins
+        "CORS_ALLOWED_ORIGINS": !Sub "${corsAllowedOrigins}"
     Layers:
       - !Ref coreLayer
       - !Ref apiLayer
@@ -161,6 +161,31 @@ Resources:
                 uri:
                   Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SearchUsersFunction.Arn}/invocations
               x-amazon-apigateway-request-validator: ValidateBodyAndParams
+            options:
+              responses:
+                "200":
+                  description: "CORS"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Methods:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'${corsAllowedOrigins}'"
         components:
           requestValidators:
             ValidateBodyAndParams:
@@ -183,14 +208,15 @@ Resources:
             - POST
             - PUT
           CachedMethods:
-            - GET
             - HEAD
+            - GET
           Compress: true
           DefaultTTL: 0
           ForwardedValues:
             Headers:
               - Authorization
               - User-Agent
+              - Origin
             QueryString: true
           TargetOriginId: apigwOrigin
           ViewerProtocolPolicy: redirect-to-https
@@ -233,11 +259,11 @@ Outputs:
   ApiId:
     Description: "API Gateway Id"
     Value: !Ref ApiGatewayApi
-  SearchApiUrl:
+  ApiGatewayUrl:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
-  SearchApiCloudFrontDistributionUrl:
-    Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ] ] ], "" ]
+  CloudFrontDistributionUrl:
+    Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ], '/Prod' ] ], "" ]
     Description: URL of the CloudFront distribution
   SearchUsersFunctionArn:
     Description: "SearchUsersFunction ARN"

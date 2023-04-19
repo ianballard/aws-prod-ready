@@ -94,6 +94,7 @@ Parameters:
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
   isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
+  isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
 
 Resources:
 
@@ -114,7 +115,7 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedOrigins:
-              - '*'
+              - !Ref corsAllowedOrigins
             AllowedMethods:
               - 'GET'
               - 'HEAD'
@@ -185,6 +186,7 @@ Resources:
         - AmazonS3FullAccess
         - AmazonAPIGatewayAdministrator
         - AWSXRayDaemonWriteAccess
+        - CloudFrontFullAccess
       Handler: api_admin_functions.manage_api_exports
 
   WebACLWithAMR:
@@ -252,6 +254,8 @@ Resources:
       ServiceToken: !GetAtt ManageApiExportsFunction.Arn
       ApiId: !GetAtt AuthApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
+      CloudFrontDistribution: !Ref CloudFrontDistribution
+      ApiUrl: !If [ isApiCDNEnabled, !GetAtt AuthApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt AuthApiStack.Outputs.ApiGatewayUrl ]
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -281,6 +285,8 @@ Resources:
       ServiceToken: !GetAtt ManageApiExportsFunction.Arn
       ApiId: !GetAtt UserApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
+      CloudFrontDistribution: !Ref CloudFrontDistribution
+      ApiUrl: !If [ isApiCDNEnabled, !GetAtt UserApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
 
   SearchApiStack:
     Condition: isOpenSearchEnabled
@@ -313,3 +319,5 @@ Resources:
       ServiceToken: !GetAtt ManageApiExportsFunction.Arn
       ApiId: !GetAtt SearchApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
+      CloudFrontDistribution: !Ref CloudFrontDistribution
+      ApiUrl: !If [ isApiCDNEnabled, !GetAtt SearchApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
