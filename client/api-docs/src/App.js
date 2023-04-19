@@ -14,7 +14,9 @@ const App = () => {
       try {
         const response = await fetch(`${host}/${fileName}`);
         const json = await response.json();
-        console.log(json)
+        const description = json.info.title;
+        json.info.title = json.info.description;
+        json.info.description = description
         return json;
       } catch (error) {
         console.error('Error fetching API spec:', error);
