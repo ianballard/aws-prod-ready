@@ -111,6 +111,16 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
         LogFilePrefix: 'api-definition-access-logs/'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - 'GET'
+              - 'HEAD'
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
 
   S3BucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
@@ -158,6 +168,10 @@ Resources:
             QueryString: false
             Cookies:
               Forward: 'none'
+            Headers:
+              - 'Access-Control-Request-Headers'
+              - 'Access-Control-Request-Method'
+              - 'Origin'
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
 
