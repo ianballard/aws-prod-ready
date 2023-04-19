@@ -1,4 +1,9 @@
-from api_lib.auth.authorization import authorize, Authorization, ActionType, ResourceAccess
+from api_lib.auth.authorization import (
+    authorize,
+    Authorization,
+    ActionType,
+    ResourceAccess,
+)
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
 from core_lib.services.search import search_service

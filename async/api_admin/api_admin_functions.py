@@ -9,7 +9,7 @@ from core_lib.services.file_storage import file_storage_service
 import boto3
 
 api_gateway_client = boto3.client("apigateway")
-cloudfront_client = boto3.client('cloudfront')
+cloudfront_client = boto3.client("cloudfront")
 
 
 @lambda_handler()
@@ -19,28 +19,24 @@ def manage_api_exports(event):
     cloud_front_dist = event.get("ResourceProperties", {}).get("CloudFrontDistribution")
     api_url = event.get("ResourceProperties", {}).get("ApiUrl")
     if event.get("RequestType") in ["Create", "Update"] and api_id and bucket_name:
-
         try:
-
             file_key = get_api_file_key(api_id=api_id)
             if not file_key:
                 log_warning(f"api not found: {api_id}")
 
-            api_definition = get_export_content(api_id=api_id).decode('utf-8')
+            api_definition = get_export_content(api_id=api_id).decode("utf-8")
 
             if not api_definition:
                 log_warning(f"unable to export: {api_id}")
 
             api_definition_json = json.loads(api_definition)
 
-            api_definition_json['servers'] = [
-                {
-                    "url": api_url
-                }
-            ]
+            api_definition_json["servers"] = [{"url": api_url}]
 
             file_storage_service.upload(
-                bucket_name=bucket_name, key=file_key, content=json.dumps(api_definition_json)
+                bucket_name=bucket_name,
+                key=file_key,
+                content=json.dumps(api_definition_json),
             )
 
             create_invalidation(distribution_id=cloud_front_dist)
@@ -90,14 +86,14 @@ def create_invalidation(distribution_id: str):
         return cloudfront_client.create_invalidation(
             DistributionId=distribution_id,
             InvalidationBatch={
-                'Paths': {
-                    'Quantity': 1,
-                    'Items': [
-                        '/*',
-                    ]
+                "Paths": {
+                    "Quantity": 1,
+                    "Items": [
+                        "/*",
+                    ],
                 },
-                'CallerReference': str(datetime.utcnow())
-            }
+                "CallerReference": str(datetime.utcnow()),
+            },
         )
     except Exception as e:
         log_unexpected_exception(e)
@@ -105,8 +101,8 @@ def create_invalidation(distribution_id: str):
 
 def get_distribution(distribution_id: str):
     try:
-        return cloudfront_client.get_distribution(
-            Id=distribution_id
-        ).get('Distribution')
+        return cloudfront_client.get_distribution(Id=distribution_id).get(
+            "Distribution"
+        )
     except Exception as e:
         log_unexpected_exception(e)

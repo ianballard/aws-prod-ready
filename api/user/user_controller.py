@@ -42,7 +42,10 @@ def get(api_request: ApiRequest):
     return ApiResponse(
         api_request.headers,
         status_code=200,
-        response_body=user_data_access.find_user_by_id(_id=path_parameters.get("id")),
+        response_body=user_data_access.find_user_by_id(
+            _id=path_parameters.get("id"),
+            projection_expression="profile,username,first_name,last_name,email",
+        ),
     ).format()
 
 
@@ -57,12 +60,11 @@ def get(api_request: ApiRequest):
 def update(api_request: ApiRequest):
     path_parameters = api_request.path_parameters
     updates = api_request.body
+    user_data_access.update_user(_id=path_parameters.get("id"), updates=updates)
     return ApiResponse(
         api_request.headers,
         status_code=200,
-        response_body=user_data_access.update_user(
-            _id=path_parameters.get("id"), updates=updates
-        ),
+        response_body=updates,
     ).format()
 
 
@@ -76,10 +78,11 @@ def update(api_request: ApiRequest):
 )
 def delete(api_request: ApiRequest):
     path_parameters = api_request.path_parameters
+    user_data_access.delete_user_by_id(path_parameters.get("id"))
     return ApiResponse(
         api_request.headers,
-        status_code=200,
-        response_body=user_data_access.delete_user_by_id(path_parameters.get("id")),
+        status_code=204,
+        response_body=None,
     ).format()
 
 
