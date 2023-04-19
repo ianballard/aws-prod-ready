@@ -196,6 +196,18 @@ Resources:
                         - email
                         - first_name
                         - last_name
+              responses:
+                '201':
+                  description: Successful signup
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          username:
+                            type: string
+                          profile:
+                            type: string
               x-amazon-apigateway-integration:
                 httpMethod: post
                 type: aws_proxy
@@ -229,6 +241,9 @@ Resources:
                       method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
                       method.response.header.Access-Control-Allow-Origin: !Sub "'${corsAllowedOrigins}'"
             get:
+              responses:
+                '200':
+                  description: Successful confirmation
               parameters:
                 - name: username
                   in: query
@@ -292,6 +307,29 @@ Resources:
                       required:
                         - username
                         - password
+              responses:
+                '200':
+                  description: Successful authentication
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          ChallengeParameters:
+                            type: object
+                          AuthenticationResult:
+                            type: object
+                            properties:
+                              AccessToken:
+                                type: string
+                              ExpiresIn:
+                                type: integer
+                              TokenType:
+                                type: string
+                              RefreshToken:
+                                type: string
+                              IdToken:
+                                type: string
               x-amazon-apigateway-integration:
                 httpMethod: post
                 type: aws_proxy

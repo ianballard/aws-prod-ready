@@ -155,6 +155,20 @@ Resources:
                           minLength: 3
                       required:
                         - search_str
+              responses:
+                '200':
+                  description: Successful search
+                  content:
+                    application/json:
+                      schema:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            profile:
+                              type: string
+                            username:
+                              type: string
               x-amazon-apigateway-integration:
                 httpMethod: post
                 type: aws_proxy

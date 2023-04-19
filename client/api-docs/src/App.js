@@ -10,13 +10,36 @@ const App = () => {
 
   useEffect(() => {
 
-    const fetchApiSpec = async (fileName) => {
+    const fetchApiSpec = async (fileName, addSecurity) => {
       try {
         const response = await fetch(`${host}/${fileName}`);
         const json = await response.json();
         const description = json.info.title;
         json.info.title = json.info.description;
         json.info.description = description
+
+        console.log(json)
+
+        json.components.securitySchemes = {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        };
+
+        for (const path in json.paths) {
+          const pathObj = json.paths[path];
+
+          for (const method in pathObj) {
+            if (method === 'options') {
+              delete pathObj[method];
+            } else if (addSecurity){
+              pathObj[method].security = [{ bearerAuth: [] }];
+            }
+          }
+        }
+
         return json;
       } catch (error) {
         console.error('Error fetching API spec:', error);
@@ -25,9 +48,9 @@ const App = () => {
 
 
     (async () => {
-      setAuthApiSpec(await fetchApiSpec('Auth API.json'));
-      setUserApiSpec(await fetchApiSpec('User API.json'));
-      setSearchApiSpec(await fetchApiSpec('Search API.json'));
+      setAuthApiSpec(await fetchApiSpec('Auth API.json', false));
+      setUserApiSpec(await fetchApiSpec('User API.json', true));
+      setSearchApiSpec(await fetchApiSpec('Search API.json', true));
     })()
 
 
