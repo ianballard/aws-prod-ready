@@ -10,7 +10,8 @@
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
     "swagger-ui-react": "^4.18.2",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "nth-check": ">=2.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
