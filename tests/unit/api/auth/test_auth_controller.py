@@ -48,7 +48,7 @@ def test_signup(generate_uuid, replicated_sign_up, create_user):
     sign_up_input = {**json.loads(event["body"]), "profile": generate_uuid.return_value}
     replicated_sign_up.assert_called_once_with(**sign_up_input)
 
-    create_user_input = {**sign_up_input}
+    create_user_input = {**sign_up_input, "entity_status": "ACTIVE"}
     create_user_input.pop("password")
     create_user.assert_called_once_with(create_user_input)
 
