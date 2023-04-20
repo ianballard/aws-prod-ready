@@ -44,7 +44,7 @@ def get(api_request: ApiRequest):
         status_code=200,
         response_body=user_data_access.find_user_by_id(
             _id=path_parameters.get("id"),
-            projection_expression="profile,username,first_name,last_name,email",
+            projection_expression="profile,username,first_name,last_name,email,entity_status",
         ),
     ).format()
 

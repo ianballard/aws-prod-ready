@@ -2,6 +2,7 @@ from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
 from core_lib.data_models.user import user_data_access
 from core_lib.services.auth import auth_service
+from core_lib.utils.json_schema_util import ACTIVE_STATUS
 from core_lib.utils.lambda_util import lambda_handler
 from core_lib.utils.uuid_util import generate_uuid
 
@@ -32,6 +33,7 @@ def signup(api_request: ApiRequest):
             "email": email,
             "first_name": first_name,
             "last_name": last_name,
+            "entity_status": ACTIVE_STATUS,
         }
     )
     return ApiResponse(

@@ -1,1 +1,2 @@
 aws-xray-sdk==0.96
+jsonschema==4.17.3
