@@ -6,7 +6,7 @@ from api_lib.auth.authorization import (
 )
 from api_lib.request.api_request import ApiRequest, api
 from api_lib.response.api_response import ApiResponse
-from core_lib.data_models.user import user_data_access
+from core_lib.data_access.user import user_data_access, user_association_data_access
 from core_lib.utils.lambda_util import lambda_handler
 from core_lib.utils.thread_util import safe_get_thread_attribute
 
@@ -23,7 +23,7 @@ def query(api_request: ApiRequest):
     return ApiResponse(
         api_request.headers,
         status_code=200,
-        response_body=user_data_access.query_associated_users_with_profiles(
+        response_body=user_association_data_access.query_associated_users_with_profiles(
             user_a_id=safe_get_thread_attribute("principle")
         ),
     ).format()
@@ -99,7 +99,7 @@ def associate(api_request: ApiRequest):
     return ApiResponse(
         api_request.headers,
         status_code=201,
-        response_body=user_data_access.associate_users(
+        response_body=user_association_data_access.associate_users(
             user_a_id=safe_get_thread_attribute("principle"),
             user_b_id=path_parameters.get("id"),
         ),
