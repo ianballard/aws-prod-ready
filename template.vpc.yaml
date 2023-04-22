@@ -94,43 +94,41 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable
 
-  #
-  #  FlowLogRole:
-  #    Type: "AWS::IAM::Role"
-  #    Properties:
-  #      AssumeRolePolicyDocument:
-  #        Version: "2012-10-17"
-  #        Statement:
-  #          - Effect: "Allow"
-  #            Principal:
-  #              Service: "vpc-flow-logs.amazonaws.com"
-  #            Action: "sts:AssumeRole"
-  #      Policies:
-  #        - PolicyName: "AllowCloudWatchLogs"
-  #          PolicyDocument:
-  #            Version: "2012-10-17"
-  #            Statement:
-  #              - Effect: "Allow"
-  #                Action:
-  #                  - "logs:CreateLogGroup"
-  #                  - "logs:CreateLogStream"
-  #                  - "logs:PutLogEvents"
-  #                Resource: "arn:aws:logs:*:*:*"
-  #
-  #  FlowLog:
-  #    Type: "AWS::EC2::FlowLog"
-  #    Properties:
-  #      DeliverLogsPermissionArn: !GetAtt FlowLogRole.Arn
-  #      ResourceId: !Ref vpcId
-  #      ResourceType: "VPC"
-  #      TrafficType: "ALL"
-  #      LogGroupName: !Ref VPCFlowLogGroup
-  #
-  #  VPCFlowLogGroup:
-  #    Type: "AWS::Logs::LogGroup"
-  #    Properties:
-  #      RetentionInDays: 365
-
+#  FlowLogRole:
+#    Type: "AWS::IAM::Role"
+#    Properties:
+#      AssumeRolePolicyDocument:
+#        Version: "2012-10-17"
+#        Statement:
+#          - Effect: "Allow"
+#            Principal:
+#              Service: "vpc-flow-logs.amazonaws.com"
+#            Action: "sts:AssumeRole"
+#      Policies:
+#        - PolicyName: "AllowCloudWatchLogs"
+#          PolicyDocument:
+#            Version: "2012-10-17"
+#            Statement:
+#              - Effect: "Allow"
+#                Action:
+#                  - "logs:CreateLogGroup"
+#                  - "logs:CreateLogStream"
+#                  - "logs:PutLogEvents"
+#                Resource: "arn:aws:logs:*:*:*"
+#
+#  FlowLog:
+#    Type: "AWS::EC2::FlowLog"
+#    Properties:
+#      DeliverLogsPermissionArn: !GetAtt FlowLogRole.Arn
+#      ResourceId: !Ref VPC
+#      ResourceType: "VPC"
+#      TrafficType: "ALL"
+#      LogGroupName: !Ref VPCFlowLogGroup
+#
+#  VPCFlowLogGroup:
+#    Type: "AWS::Logs::LogGroup"
+#    Properties:
+#      RetentionInDays: 365
 
 Outputs:
   VpcId:

@@ -222,6 +222,32 @@ Resources:
               - kms:DescribeKey
             Resource: '*'
 
+  CloudTrailLogsGroup:
+    Type: AWS::Logs::LogGroup
+
+  CloudTrailLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CloudTrailLogsGroup.Arn
+
   CloudTrail:
     Condition: isPrimary
     Type: 'AWS::CloudTrail::Trail'
@@ -233,6 +259,8 @@ Resources:
       S3BucketName: !Ref CloudTrailBucket
       IsLogging: true
       KMSKeyId: !Ref TrailKmsKey
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogsGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLoggingRole.Arn
       EventSelectors:
         - DataResources:
             - Type: "AWS::DynamoDB::Table"

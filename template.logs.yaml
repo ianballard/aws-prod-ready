@@ -71,42 +71,58 @@ Resources:
         - AWSXRayDaemonWriteAccess
       Handler: app_error_logger.log_error_event
 
-  UpdateManagedAccessLogGroups:
+  EnableLogGroupSubscriptionFilters:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: async/log_management/app_access_log_management
-      Handler: update_managed_access_log_groups.update_managed_log_groups
+      CodeUri: async/log_management/subscription_filter_management
+      Handler: enable_subscription_filters.handle_new_log_group_created
       Environment:
         Variables:
           "APP_ACCESS_LOGGER_FUNCTION_ARN": !GetAtt AccessLogHandler.Arn
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AWSLambda_FullAccess
-        - CloudWatchLogsFullAccess
-        - AWSXRayDaemonWriteAccess
-      Events:
-        Cron:
-          Type: Schedule
-          Properties:
-            Enabled: True
-            Schedule: cron(5/10 * * * ? *)
-
-  UpdateManagedErrorLogGroups:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: async/log_management/app_error_log_management
-      Handler: update_managed_error_log_groups.update_managed_log_groups
-      Environment:
-        Variables:
           "APP_ERROR_LOGGER_FUNCTION_ARN": !GetAtt ErrorLogHandler.Arn
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AWSLambda_FullAccess
-        - CloudWatchLogsFullAccess
-        - AWSXRayDaemonWriteAccess
-      Events:
-        Cron:
-          Type: Schedule
-          Properties:
-            Enabled: True
-            Schedule: cron(*/10 * * * ? *)
+      Role: !GetAtt EnableLogGroupSubscriptionFiltersRole.Arn
+
+  EnableLogGroupSubscriptionFiltersRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  LogGroupCreationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Trigger Lambda function when a new CloudWatch log group is created
+      EventPattern:
+        source:
+          - aws.logs
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - logs.amazonaws.com
+          eventName:
+            - CreateLogGroup
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt EnableLogGroupSubscriptionFilters.Arn
+          Id: LogGroupLambdaFunctionTarget
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt EnableLogGroupSubscriptionFilters.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LogGroupCreationEventRule.Arn
