@@ -48,7 +48,7 @@ Parameters:
     Default: ""
   vpcSubnetIds:
     Description: "Lambda VPC Subnets"
-    Type: String
+    Type: CommaDelimitedList
     Default: ""
   enableVPC:
     Description: "Is VPC enabled (true|false)"
@@ -236,7 +236,7 @@ Resources:
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         securityGroup: !Ref securityGroup
-        vpcSubnetIds: !Ref vpcSubnetIds
+        vpcSubnetIds: !Join [',', !Ref vpcSubnetIds]
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
@@ -267,7 +267,7 @@ Resources:
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         securityGroup: !Ref securityGroup
-        vpcSubnetIds: !Ref vpcSubnetIds
+        vpcSubnetIds: !Join [',', !Ref vpcSubnetIds]
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
@@ -299,7 +299,7 @@ Resources:
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         securityGroup: !Ref securityGroup
-        vpcSubnetIds: !Ref vpcSubnetIds
+        vpcSubnetIds: !Join [',', !Ref vpcSubnetIds]
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
