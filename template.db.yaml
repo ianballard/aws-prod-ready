@@ -7,8 +7,8 @@ Parameters:
   stage:
     Description: "Stage"
     Type: String
-  backupRegion:
-    Description: "Backup Region"
+  replicaRegion:
+    Description: "Replica Region"
     Type: String
   dbTableName:
     Description: "Table Name"
@@ -83,7 +83,7 @@ Resources:
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
           DeletionProtectionEnabled: true
-        - Region: !Ref backupRegion
+        - Region: !Ref replicaRegion
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
           DeletionProtectionEnabled: true
@@ -130,7 +130,7 @@ Resources:
             Lifecycle:
               DeleteAfterDays: 60
             CopyActions:
-              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:DynamoDBBackupVault-${stage}-${backupRegion}"
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${replicaRegion}:${AWS::AccountId}:backup-vault:DynamoDBBackupVault-${stage}-${replicaRegion}"
                 Lifecycle:
                   DeleteAfterDays: 60
 

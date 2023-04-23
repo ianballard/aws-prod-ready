@@ -7,8 +7,8 @@ Parameters:
   stage:
     Description: "Stage"
     Type: String
-  backupRegion:
-    Description: "Backup Region"
+  replicaRegion:
+    Description: "Replica Region"
     Type: String
   stackType:
     Description: "(primary|secondary)"
@@ -162,7 +162,7 @@ Resources:
                 Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-app-storage", !Sub "arn:aws:s3:::${appId}-${stage}-primary-app-storage" ]
                 StorageClass: STANDARD
                 EncryptionConfiguration:
-                  ReplicaKmsKeyID: !Sub "arn:aws:kms:${backupRegion}:${AWS::AccountId}:alias/aws/s3"
+                  ReplicaKmsKeyID: !Sub "arn:aws:kms:${replicaRegion}:${AWS::AccountId}:alias/aws/s3"
               Prefix: ''
               SourceSelectionCriteria:
                 SseKmsEncryptedObjects:
@@ -212,7 +212,7 @@ Resources:
             Lifecycle:
               DeleteAfterDays: 60
             CopyActions:
-              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${backupRegion}:${AWS::AccountId}:backup-vault:S3BackupVault-${stage}-${backupRegion}"
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${replicaRegion}:${AWS::AccountId}:backup-vault:S3BackupVault-${stage}-${replicaRegion}"
                 Lifecycle:
                   DeleteAfterDays: 60
 

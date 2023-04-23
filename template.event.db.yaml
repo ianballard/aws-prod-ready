@@ -7,8 +7,8 @@ Parameters:
   stage:
     Description: "Stage"
     Type: String
-  backupRegion:
-    Description: "Backup Region"
+  replicaRegion:
+    Description: "Replica Region"
     Type: String
   coreLayer:
     Description: "Core Library Layer"

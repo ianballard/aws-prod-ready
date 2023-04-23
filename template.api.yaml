@@ -16,7 +16,7 @@ Globals:
       Variables:
         "stage": !Ref "stage"
         "region": !Ref AWS::Region
-        "BACKUP_REGION": !Ref backupRegion
+        "REPLICA_REGION": !Ref replicaRegion
         "VPC_ENABLED": !Ref enableVPC
         "CORS_ALLOWED_ORIGINS": !Ref corsAllowedOrigins
     Layers:
@@ -33,8 +33,8 @@ Parameters:
   stage:
     Description: "Stage"
     Type: String
-  backupRegion:
-    Description: "Backup Region"
+  replicaRegion:
+    Description: "Replica Region"
     Type: String
   coreLayer:
     Description: "Core Library Layer"
@@ -232,7 +232,7 @@ Resources:
       TemplateURL: template.api.auth.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         securityGroup: !Ref securityGroup
@@ -263,7 +263,7 @@ Resources:
       TemplateURL: template.api.user.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         securityGroup: !Ref securityGroup
@@ -295,7 +295,7 @@ Resources:
       TemplateURL: template.api.search.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref coreLayer
         apiLayer: !Ref apiLayer
         securityGroup: !Ref securityGroup

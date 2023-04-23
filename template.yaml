@@ -7,8 +7,8 @@ Parameters:
   stage:
     Description: "Stage"
     Type: String
-  backupRegion:
-    Description: "Backup Region"
+  replicaRegion:
+    Description: "Replica Region"
     Type: String
   appId:
     Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
@@ -122,7 +122,7 @@ Resources:
       Parameters:
         stage: !Ref stage
         stackType: !Ref stackType
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName
         enableBackup: !Ref enableBackup
 
@@ -133,7 +133,7 @@ Resources:
       TemplateURL: template.s3.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         stackType: !Ref stackType
         appId: !Ref appId
         enableS3Replication: !Ref enableS3Replication
@@ -146,7 +146,7 @@ Resources:
       TemplateURL: template.db.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         dbTableName: !Ref dbTableName
         enableBackup: !Ref enableBackup
         stackType: !Ref stackType
@@ -158,7 +158,7 @@ Resources:
       TemplateURL: template.data-pipeline.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         appId: !Ref appId
         enableBackup: !Ref enableBackup
         stackType: !Ref stackType
@@ -184,7 +184,7 @@ Resources:
       TemplateURL: template.auth.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
 
   CoreLibraryLayer:
     Type: AWS::Serverless::LayerVersion
@@ -213,7 +213,7 @@ Resources:
       TemplateURL: template.logs.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref CoreLibraryLayer
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
@@ -227,7 +227,7 @@ Resources:
       TemplateURL: template.opensearch.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
@@ -239,7 +239,7 @@ Resources:
       TemplateURL: template.event.db.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref CoreLibraryLayer
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
@@ -253,7 +253,7 @@ Resources:
       TemplateURL: template.event.auth.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref CoreLibraryLayer
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
@@ -265,7 +265,7 @@ Resources:
       TemplateURL: template.api.yaml
       Parameters:
         stage: !Ref stage
-        backupRegion: !Ref backupRegion
+        replicaRegion: !Ref replicaRegion
         coreLayer: !Ref CoreLibraryLayer
         apiLayer: !Ref ApiLibraryLayer
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]

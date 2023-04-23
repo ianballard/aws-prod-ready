@@ -28,7 +28,7 @@ The AWS Production-Ready Starter Template is designed to help you quickly create
 The full list of configurations for this project and their descriptions are as follows:
 
 - `stage`: The environment stage (e.g., dev, staging, prod, or test-1, test-2, etc. for ephemeral environments).
-- `backupRegion`: The secondary AWS region where replicas and backups will be stored.
+- `replicaRegion`: The secondary AWS region where replicas and backups will be stored.
 - `appId`: A unique identifier used for creating S3 bucket names.
 - `dbTableName`: The name of the DynamoDB table.
 - `stackType`: Determines whether the stack is a primary or secondary (replica) region.
