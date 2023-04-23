@@ -67,7 +67,7 @@ Resources:
             QueueName: !GetAtt AuthEventQueue.QueueName
       Handler: auth_event_handler.handle_auth_event
       Events:
-        ErrorLogEvent:
+        AuthEvent:
           Type: SQS
           Properties:
             Queue: !GetAtt AuthEventQueue.Arn

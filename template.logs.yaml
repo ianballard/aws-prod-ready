@@ -28,6 +28,14 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+  lambdaInvocationThreshold:
+    Description: "Max number of invocations in a given 1 minute period"
+    Type: String
+    Default: '100'
+
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -74,8 +82,8 @@ Resources:
   EnableLogGroupSubscriptionFilters:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: async/log_management/subscription_filter_management
-      Handler: enable_subscription_filters.handle_new_log_group_created
+      CodeUri: async/log_management/log_group_management
+      Handler: process_new_log_group.handle_new_log_group_created
       Environment:
         Variables:
           "APP_ACCESS_LOGGER_FUNCTION_ARN": !GetAtt AccessLogHandler.Arn
@@ -126,3 +134,51 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt LogGroupCreationEventRule.Arn
+
+  LambdaInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Trigger an alarm if the number of Lambda invocations exceeds the threshold"
+      Namespace: "AWS/Lambda"
+      MetricName: "Invocations"
+      Statistic: "Sum"
+      Period: 60 # 1 minute
+      EvaluationPeriods: 1
+      Threshold: !Ref lambdaInvocationThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - Ref: LambdaInvocationsSNSAlertsTopic
+
+  LambdaInvocationsSNSAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Lambda Invocations Alarm"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription
+
+  AppErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Trigger an alarm if the number of Lambda invocations exceeds the threshold"
+      Namespace: "AWS/Lambda"
+      MetricName: "Invocations"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ErrorLogHandler
+      Statistic: "Sum"
+      Period: 60 # 1 minute
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AppErrorsSNSAlertsTopic
+
+  AppErrorsSNSAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "App Error Alarm"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription

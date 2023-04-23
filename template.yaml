@@ -86,6 +86,9 @@ Parameters:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
     Default: ''
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
@@ -203,7 +206,7 @@ Resources:
         - python3.9
       RetentionPolicy: Delete
 
-  LogManagementStack:
+  LogsAndMetricsStack:
     Type: "AWS::CloudFormation::Stack"
     Condition: isPersistentStorageEnabled
     Properties:
@@ -215,6 +218,7 @@ Resources:
         securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   OpenSearchStack:
     Type: "AWS::CloudFormation::Stack"
