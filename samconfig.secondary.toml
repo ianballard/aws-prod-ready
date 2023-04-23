@@ -3,11 +3,10 @@ version = 0.1
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "app-backend-secondary"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-94dyevpzp9fu"
 s3_prefix = "app-backend-secondary"
 region = "us-west-2"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 image_repositories = []
 confirm_changeset = false
-parameter_overrides = "stage=\"development\" replicaRegion=\"us-east-2\" dbTableName=\"DBTable\" stackType=\"secondary\" appId=\"t52x7zk6ls6p\" enableS3Replication=\"true\" enableVPC=\"false\" enableSecurity=\"false\""
+parameter_overrides = "stage=\"development\" replicaRegion=\"us-east-2\" enablePersistentStorage=\"true\" enableAWSAuth=\"true\" enableBackup=\"false\" dbTableName=\"DBTable\" enableSecurity=\"true\" enableS3Replication=\"false\" enableVPC=\"false\" enableOpenSearch=\"false\" enableApiCDN=\"false\" corsAllowedOrigins=\"*\""
 

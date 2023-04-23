@@ -63,7 +63,6 @@ Resources:
         - python3.9
       RetentionPolicy: Delete
 
-
   SignUpFunction:
     Type: AWS::Serverless::Function
     Properties:

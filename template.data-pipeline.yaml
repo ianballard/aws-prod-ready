@@ -20,7 +20,6 @@ Parameters:
   appId:
     Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
     Type: String
-    Default: "t52x7zk6ls6p"
   enableBackup:
     Description: "Is aws backup enabled (true|false)"
     Type: String

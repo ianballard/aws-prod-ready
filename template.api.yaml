@@ -89,7 +89,6 @@ Parameters:
   appId:
     Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
     Type: String
-    Default: "abc123abc123"
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
