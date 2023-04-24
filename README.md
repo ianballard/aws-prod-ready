@@ -103,9 +103,57 @@ The use of nested stacks also simplifies the management and deployment of your i
 
 The template includes monitoring and alerting capabilities to ensure the health and performance of your infrastructure. It integrates with Amazon CloudWatch for monitoring your resources and applications, as well as sending notifications to the specified email distribution list for any alerts or issues that may arise.
 
+### APIs
+
+The AWS Production-Ready Starter Template also includes several pre-built APIs to help you get started with common functionality in your application:
+
+1. **Auth API**: This API provides three endpoints for user authentication:
+   * Sign Up: Allows users to register for an account.
+   * Confirm Sign Up: Confirms the user's registration with a verification code.
+   * Authenticate: Authenticates the user and provides an access token for further API requests.
+
+2. **User Management API**: This API includes five endpoints to manage users and their relationships:
+   * Associate Users: Allows users to establish associations with other users (e.g., "following" in a social media platform).
+   * Query Associated Users: Retrieves a list of users associated with the current user.
+   * Get User Profile: Retrieves the profile information for a specific user.
+   * Update User: Allows users to update their own profile information.
+   * Delete User: Enables users to delete their own account.
+
+3. **Search API** (available if OpenSearch is enabled): This API allows you to search for users based on various attributes, such as username, email, first name, or last name. It provides a single endpoint for submitting search queries.
+
+Each endpoint in the User Management and Search APIs is equipped with authorization models to determine if the principal user can access the requested resources. This ensures that your application enforces appropriate access controls and maintains user privacy.
+
+These pre-built APIs can significantly accelerate the development process by providing a solid foundation for common functionality in your application.
+
 ### Auto-Generated OpenAPI Specification
 
-The template includes automatic generation of OpenAPI specifications from API Gateway definitions. These specifications are published to an Amazon CloudFront distribution, making it easy for developers to access and maintain up-to-date documentation for your API. This feature streamlines the process of keeping your API documentation in sync with your actual API implementation, ensuring that developers always have accurate and up-to-date information about your API's capabilities and usage.
+The template includes automatic generation of OpenAPI specifications from API Gateway definitions. These specifications are published to an Amazon CloudFront distribution, making it easy for developers to access and maintain up-to-date documentation for your API. This feature streamlines the process of keeping your API documentation in sync with your actual API implementation, ensuring that developers always have accurate and up-to-date information about your API's capabilities and usage. Assuming the API stacks have been deployed, follow these steps to view the api definitions with a SwaggerUI:
+
+1. Set the CloudFront distribution: After deploying the stack, locate the CloudFront distribution URL that serves the API definitions. Update the client/api-docs/.env file with the appropriate distribution URL.
+
+2. Install dependencies: Navigate to the client/api-docs directory and run npm install to install the required dependencies for the API documentation viewer.
+
+3. Start the documentation viewer: From the client/api-docs directory, run npm start to start the documentation viewer. This will open a local development server in your default web browser, allowing you to interact with the auto-generated API documentation.
+
+### GitHub Actions Workflows
+
+The AWS Production-Ready Starter Template includes GitHub Actions workflows to automate various aspects of the development process. These workflows are divided into two categories:
+
+#### 1. Automatic Workflows
+
+These workflows run automatically on each push to the repository, ensuring that your code is consistently tested and adheres to best practices:
+
+* **Run Unit Tests**: Tests your application logic using the Pytest framework.
+* **Run Linting**: Checks your code for compliance with Python best practices, such as PEP 8, using the Flake8 linting tool.
+* **Run Security Static Code Analysis**: Performs static code analysis to identify potential security vulnerabilities in your code using the Bandit security linter.
+
+#### 2. Manual Workflows
+
+These workflows are manually triggered and designed to assist with specific development tasks:
+
+* **Create Ephemeral Env CI/CD**: This workflow allows you to create ephemeral environments for non-persistent resources, such as API Gateway and AWS Lambda functions. To run this workflow, you need to provide the source branch and a stage name for the new environment. This enables you to easily test and review changes in an isolated environment before merging them into your main branch.
+
+By incorporating these GitHub Actions workflows into your development process, you can maintain high-quality, secure code and streamline various tasks related to testing and deploying your application.
 
 ## Prerequisites
 
@@ -187,8 +235,10 @@ By completing these prerequisites, you will have a properly configured developme
 
 ## Usage
 
-### Setting Parameters
+### Use as a Template
+In the GitHub repository page, click the **Use this template** button to create a new repository.
 
+Follow GitHub protection standards for the repo including adding branch protection rules and adding code owners.
 
 ### Deploy the sample application
 
@@ -228,6 +278,16 @@ During the guided deployment process, you will be prompted to enter values for e
 
 * **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
 * **Save arguments to samconfig.<primary|secondary>.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
+
+### Setting Repository Variables
+After deploying the first time, update the repository **Action secrets and variables** under the **Settings** tab.
+
+In order for ephemeral environments to work properly, the following secrets need to be added:
+
+1. AWS_ACCESS_KEY_ID
+2. AWS_SECRET_ACCESS_KEY
+3. PRIMARY_SAM_BUCKET (primary region stack)
+4. SECONDARY_SAM_BUCKET (replica region stack)
 
 ### Use the SAM CLI to build and test locally
 
@@ -354,32 +414,96 @@ python -m pytest tests/unit -v
 
 See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
 
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+Next, you can use AWS Serverless Application Repository to deploy ready to use Apps and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
 
 ### Examples
 
-Provide examples of how to use the project, including code snippets or command-line examples.
+#### Auth API
 
-## Maintenance
+1. Sign Up
+   ```bash
+   curl -X POST 'https://<auth-api-host>/Prod/v1.0/signup' \
+   -H 'Content-Type: application/json' \
+   -d '{
+     "username": "johndoe",
+     "password": "your_password",
+     "email": "johndoe@example.com",
+     "first_name": "John",
+     "last_name": "Doe"
+   }'
 
-Explain how to maintain the project, including how to update dependencies, apply patches, or perform any other required maintenance tasks.
+   ```
+
+2. Confirm Sign Up
+   ```bash
+   curl -X GET 'https://<auth-api-host>/Prod/v1.0/confirm_sign_up?username=johndoe&code=123456'
+   ```
+   
+3. Authenticate
+   ```bash
+   curl -X POST 'https://<auth-api-host>/Prod/v1.0/auth' \
+   -H 'Content-Type: application/json' \
+   -d '{
+     "username": "johndoe",
+     "password": "your_password"
+   }'
+
+   ```
+
+#### Search API
+
+1. Search Users
+   ```bash
+   curl -X POST 'https://<search-api-host>/Prod/v1.0/search/user' \
+   -H 'Content-Type: application/json' \
+   -d '{
+     "search_str": "johndoe"
+   }'
+   ```
+
+#### User API
+
+1. Associate user:
+   ```bash
+   curl -X PUT 'https://<user-api-host>/Prod/v1.0/user/{id}/associate' \
+   -H 'Content-Type: application/json'
+   ```
+   Replace `{id}` with the user's ID.
+
+2. Query associated users:
+   ```bash
+   curl -X GET 'https://<user-api-host>/Prod/v1.0/user' \
+   -H 'Content-Type: application/json'
+   ```
+
+3. Get user:
+   ```bash
+   curl -X GET 'https://<user-api-host>/Prod/v1.0/user/{id}' \
+   -H 'Content-Type: application/json'
+   ```
+   Replace `{id}` with the user's ID.
+
+4. Update user:
+   ```bash
+   curl -X PATCH 'https://<user-api-host>/Prod/v1.0/user/{id}' \
+   -H 'Content-Type: application/json' \
+   -d '{"entity_status": "example_status"}'
+   ```
+   Replace `{id}` with the user's ID and `example_status` with the desired status (ACTIVE or INACTIVE).
+
+5. Delete user:
+   ```bash
+   curl -X DELETE 'https://<user-api-host>/Prod/v1.0/user/{id}' \
+   -H 'Content-Type: application/json'
+   ```
+   Replace `{id}` with the user's ID.
 
 ## Contributing
 
-Outline the process for contributing to the project, including any guidelines, code of conduct, or specific steps that contributors should follow.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/YourFeatureName`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin feature/YourFeatureName`)
-5. Create a new Pull Request
+Pull requests are welcome for bugfixes and new features. Please only create pull requests targeting the develop branch and use gitflow naming conventions. 
+- New Features: feature/YourFeatureName
+- Fixes: bugfix/FixName
 
 ## License
 
-Include the project's license information, such as the type of license and a link to the full license text.
-
-This project is licensed under the [LICENSE NAME] License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-List any individuals, organizations, or resources that were instrumental in the creation or development of the project.
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)

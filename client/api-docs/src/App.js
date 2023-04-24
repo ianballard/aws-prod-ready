@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SwaggerUIComponent from './components/SwaggerUIComponent/SwaggerUIComponent';
 
-const host = 'https://d3fizb59skowhy.cloudfront.net'
+const host = `https://${process.env.REACT_APP_API_STORAGE_HOST}`
 
 const App = () => {
   const [authApiSpec, setAuthApiSpec] = useState(null);
