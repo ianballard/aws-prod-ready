@@ -20,7 +20,6 @@ Globals:
     Layers:
       - !Ref CoreLibraryLayer
       - !Ref ApiLibraryLayer
-      - !Ref LocalDependenciesLayer
 
 
 Parameters:
@@ -49,16 +48,6 @@ Resources:
       LayerName: api-library-layer
       Description: Api library for project.
       ContentUri: api/layers/api_layer
-      CompatibleRuntimes:
-        - python3.9
-      RetentionPolicy: Delete
-
-  LocalDependenciesLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: core-library-layer
-      Description: Core library for project.
-      ContentUri: local_layers/py_packages
       CompatibleRuntimes:
         - python3.9
       RetentionPolicy: Delete
@@ -114,23 +103,6 @@ Resources:
             Path: /v1.0/auth
             Method: post
 
-  CreateUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: api/user/
-      Handler: user_controller.put
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /v1.0/user
-            Method: put
-
   QueryUserFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -147,84 +119,3 @@ Resources:
           Properties:
             Path: /v1.0/user
             Method: get
-
-  GetUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: api/user/
-      Handler: user_controller.get
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /v1.0/user/{id}
-            Method: get
-
-  UpdateUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: api/user/
-      Handler: user_controller.update
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /v1.0/user/{id}
-            Method: patch
-
-  DeleteUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: api/user/
-      Handler: user_controller.delete
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /v1.0/user/{id}
-            Method: delete
-
-  AssociateUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: api/user/
-      Handler: user_controller.associate
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AmazonCognitoPowerUser
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /v1.0/user/{id}/associate
-            Method: put
-
-  UpdateManagedAccessLogGroups:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: async/log_management/app_access_log_management
-      Handler: update_managed_access_log_groups.update_managed_log_groups
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /test
-            Method: post
