@@ -79,13 +79,14 @@ The template is built with a strong focus on security, incorporating the followi
 - Resource management using AWS Config, which provides a detailed view of the configuration of your AWS resources and evaluates them against best practices.
 - Threat detection and continuous security monitoring with Amazon GuardDuty.
 - Aggregated security findings and insights with AWS Security Hub.
+- The ability to configure resources in private subnets within a VPC, offering an additional layer of security.
+- User access logging to easily trace user sessions
 
 ### Business Continuity
 
 The template emphasizes business continuity by providing:
 
 - Data redundancy and backups using AWS Backup and cross-region replication for Amazon S3 buckets.
-- The ability to configure resources in private subnets within a VPC, offering an additional layer of security.
 
 ### Highly Configurable
 
