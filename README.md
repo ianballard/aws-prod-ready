@@ -183,14 +183,6 @@ Before working with the AWS Production-Ready Starter Template, make sure you hav
 
    This command installs the required packages and libraries specified in the `requirements.txt` file into your Conda environment.
 
-8. **Run the requirements_to_local_layers script**: After installing the dependencies, run the `requirements_to_local_layer.sh` script located in the `./scripts` directory. This script helps you manage your project's dependencies and ensures that your AWS Lambda functions have access to the necessary libraries. Run the following command:
-
-   ```
-   ./scripts/requirements_to_local_layer.sh
-   ```
-
-   This command will process the installed dependencies and generate the required local layers for your AWS Lambda functions.
-
 By completing these prerequisites, you will have a properly configured development environment to work with the AWS Production-Ready Starter Template.
 
 ## Usage
@@ -224,7 +216,7 @@ The first command will build the source of your application. The second command 
 * **Parameter enablePersistentStorage**: Enable persistent storage (true or false).
 * **Parameter enableVPC**: Enable VPC support (true or false).
 * **Parameter enableOpenSearch**: Enable OpenSearch support (true or false).
-* **Parameter enableS3Replication**: Enable S3 replication (true or false).
+* **Parameter enableS3Replication**: Enable S3 replication (true or false). **NOTE:** This NEEDS to be false for a first time deploy, otherwise the stack will fail due to the destination bucket not yet existing in the replica region. 
 * **Parameter enableAWSAuth**: Enable AWS authentication with Amazon Cognito (true or false).
 * **Parameter enableBackup**: Enable AWS Backup support (true or false).
 * **Parameter enableSecurity**: Enable security features (true or false).
@@ -363,19 +355,6 @@ python -m pytest tests/unit -v
 See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
 
 Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
-
-----
-
-## New Env Deploy Process:
-
-- update values in samconfig files for regions and app ids other parameter overrides
-- deploy main stack with replication disabled
-- deploy second stack with replication enabled
-- redeploy main stack with replication enabled
-
-### Configuration
-
-If applicable, describe any configuration files or options and how to customize them.
 
 ### Examples
 
