@@ -5,6 +5,22 @@ from core_lib.services.auth import auth_service
 from core_lib.utils.json_schema_util import ACTIVE_STATUS
 from core_lib.utils.lambda_util import lambda_handler
 from core_lib.utils.uuid_util import generate_uuid
+from core_lib.services.database import database_service
+
+
+@lambda_handler()
+@api()
+def health(api_request: ApiRequest):
+
+    auth_service.health_check()
+
+    database_service.health_check()
+
+    return ApiResponse(
+        request_headers=api_request.headers,
+        status_code=200,
+        response_body=None,
+    ).format()
 
 
 @lambda_handler()

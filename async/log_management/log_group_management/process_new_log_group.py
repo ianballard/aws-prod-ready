@@ -16,20 +16,16 @@ def handle_new_log_group_created(event):
         return
 
     error_log_destination_arn = os.getenv("APP_ERROR_LOGGER_FUNCTION_ARN")
-    if (
-        f"/aws/lambda/{get_lambda_function_name(error_log_destination_arn)}"
-        != new_log_group_name
-    ):
-        put_subscription_filter(
-            log_group=new_log_group_name,
-            destination_arn=error_log_destination_arn,
-            filter_name="error_log_filter",
-            filter_pattern="APP_ERROR_LOG",
-        )
-    else:
-        log_info(
-            "new log group is the error log target destination. skipping subscription filter creation."
-        )
+    if new_log_group_name == f"/aws/lambda/{get_lambda_function_name(error_log_destination_arn)}":
+        log_info('new log group is the error log target destination. skipping subscription filter creation.')
+        return
+
+    put_subscription_filter(
+        log_group=new_log_group_name,
+        destination_arn=error_log_destination_arn,
+        filter_name="error_log_filter",
+        filter_pattern="APP_ERROR_LOG",
+    )
 
     access_log_destination_arn = os.getenv("APP_ACCESS_LOGGER_FUNCTION_ARN")
     if (
