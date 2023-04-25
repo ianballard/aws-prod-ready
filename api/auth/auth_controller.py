@@ -11,7 +11,6 @@ from core_lib.services.database import database_service
 @lambda_handler()
 @api()
 def health(api_request: ApiRequest):
-
     auth_service.health_check()
 
     database_service.health_check()

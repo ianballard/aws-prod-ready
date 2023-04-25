@@ -16,7 +16,6 @@ from core_lib.utils.thread_util import safe_get_thread_attribute
 @lambda_handler()
 @api()
 def health(api_request: ApiRequest):
-
     auth_service.health_check()
 
     database_service.health_check()

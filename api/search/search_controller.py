@@ -14,7 +14,6 @@ from core_lib.utils.lambda_util import lambda_handler
 @lambda_handler()
 @api()
 def health(api_request: ApiRequest):
-
     auth_service.health_check()
 
     search_service.health_check()
