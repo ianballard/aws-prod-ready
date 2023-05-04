@@ -73,10 +73,27 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
+
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
   isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
+  isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
 
 Resources:
 
@@ -104,6 +121,97 @@ Resources:
   ApiGatewayApiAccessLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
+
+  AcmCertificate:
+    Condition: isDNSEnabled
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub '*.${hostedZoneName}'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref hostedZoneName
+          HostedZoneId: !Ref hostedZoneId
+
+  CustomDomain:
+    Condition: isDNSEnabled
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Sub "api-auth-${stage}.${hostedZoneName}"
+      RegionalCertificateArn: !Ref AcmCertificate
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  BasePathMapping:
+    Condition: isDNSEnabled
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref CustomDomain
+      RestApiId: !Ref ApiGatewayApi
+      Stage: 'Prod'
+
+  HealthCheck:
+    Condition: isDNSEnabled
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTPS
+        ResourcePath: /Prod/v1.0/health
+        FullyQualifiedDomainName: !Sub "${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com"
+        Port: 443
+        RequestInterval: 30
+        FailureThreshold: 3
+        EnableSNI: true
+        Regions:
+          - us-east-1
+          - us-west-1
+          - us-west-2
+      HealthCheckTags:
+        - Key: 'Name'
+          Value: !Sub 'AuthApiHealthCheck-${AWS::Region}'
+
+  HealthCheckStatusAlarm:
+    Condition: isDNSEnabled
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Health check failed
+      Namespace: AWS/Route53
+      MetricName: HealthCheckStatus
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !Ref HealthCheck
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref HealthCheckSNSAlertTopic
+
+  HealthCheckSNSAlertTopic:
+    Condition: isDNSEnabled
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Route53HealthCheckAlert
+      Subscription:
+        - Protocol: email
+          Endpoint: ianballard.dev@gmail.com
+
+  ARecordSet:
+    Condition: isDNSEnabled
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref hostedZoneId
+      Name: !Sub "api-auth-${stage}.${hostedZoneName}"
+      Type: A
+      SetIdentifier: !Sub "auth-${stage}-${AWS::Region}"
+      Region: !Ref AWS::Region
+      AliasTarget:
+        DNSName: !GetAtt CustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
+        EvaluateTargetHealth: true
+      HealthCheckId: !Ref HealthCheck
 
   ApiGatewayApi:
     Type: AWS::Serverless::Api
@@ -378,48 +486,6 @@ Resources:
               validateRequestBody: true
               validateRequestParameters: true
 
-  CloudFrontDistribution:
-    Condition: isApiCDNEnabled
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Comment: !Sub '${stage} AUTH APIGW'
-        DefaultCacheBehavior:
-          AllowedMethods:
-            - DELETE
-            - GET
-            - HEAD
-            - OPTIONS
-            - PATCH
-            - POST
-            - PUT
-          CachedMethods:
-            - HEAD
-            - GET
-          Compress: true
-          DefaultTTL: 0
-          ForwardedValues:
-            Headers:
-              - Authorization
-              - User-Agent
-              - Origin
-            QueryString: true
-          TargetOriginId: apigwOrigin
-          ViewerProtocolPolicy: redirect-to-https
-        Enabled: true
-        HttpVersion: http2
-        IPV6Enabled: true
-        Origins:
-          - CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: https-only
-              OriginSSLProtocols:
-                - TLSv1.2
-            DomainName: !Sub '${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com'
-            Id: apigwOrigin
-        PriceClass: PriceClass_100
-
   HealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -503,12 +569,6 @@ Outputs:
   ApiId:
     Description: "API Gateway Id"
     Value: !Ref ApiGatewayApi
-  ApiGatewayUrl:
-    Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
-  CloudFrontDistributionUrl:
-    Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ], '/Prod' ] ], "" ]
-    Description: URL of the CloudFront distribution
   SignUpFunctionArn:
     Description: "Sign Up Function ARN"
     Value: !GetAtt SignUpFunction.Arn
@@ -521,7 +581,10 @@ Outputs:
   AuthenticateFunctionIamRole:
     Description: "Implicit IAM Role created for the auth function"
     Value: !GetAtt AuthenticateFunctionRole.Arn
+  ApiGatewayUrl:
+    Description: "API Url"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
   ApiDomain:
     Description: "API Domain"
-    Value: !If [ isApiCDNEnabled, !Join [ '', [ !GetAtt [ CloudFrontDistribution, DomainName ], '/Prod' ] ], !Sub "${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod" ]
+    Value: !Sub "${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com"
 

@@ -89,6 +89,21 @@ Parameters:
   appId:
     Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
     Type: String
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
@@ -240,6 +255,9 @@ Resources:
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
         enableApiCDN: !Ref enableApiCDN
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
 
   AuthWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -254,7 +272,7 @@ Resources:
       ApiId: !GetAtt AuthApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
       CloudFrontDistribution: !Ref CloudFrontDistribution
-      ApiUrl: !If [ isApiCDNEnabled, !GetAtt AuthApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt AuthApiStack.Outputs.ApiGatewayUrl ]
+      ApiUrl: !GetAtt AuthApiStack.Outputs.ApiGatewayUrl
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -320,3 +338,8 @@ Resources:
       BucketName: !Ref ApiDefinitionStorage
       CloudFrontDistribution: !Ref CloudFrontDistribution
       ApiUrl: !If [ isApiCDNEnabled, !GetAtt SearchApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
+
+Outputs:
+  AuthApiDomain:
+    Description: "Auth API Domain"
+    Value: !GetAtt AuthApiStack.Outputs.ApiDomain

@@ -88,6 +88,22 @@ Parameters:
   emailDistributionSubscription:
     Description: "Email distribution of who gets notified of alerts"
     Type: String
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
+
 
 Conditions:
   isPrimary: !Equals [ !Ref stackType, 'primary' ]
@@ -276,3 +292,6 @@ Resources:
         enableOpenSearch: !Ref enableOpenSearch
         stackType: !Ref stackType
         appId: !Ref appId
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
