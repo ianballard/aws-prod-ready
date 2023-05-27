@@ -65,13 +65,6 @@ Parameters:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
     Default: ''
-  enableApiCDN:
-    Description: "Is CDN for APIGW enabled"
-    Type: String
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'true'
   enableOpenSearch:
     Description: "Enable Open Search (true|false)"
     Type: String
@@ -104,11 +97,15 @@ Parameters:
     Description: "DNS Hosted Id"
     Type: String
     Default: ''
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+    Default: ''
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
   isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
-  isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
+  isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
 
 Resources:
 
@@ -254,10 +251,10 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableApiCDN: !Ref enableApiCDN
         enableDNS: !Ref enableDNS
         hostedZoneName: !Ref hostedZoneName
         hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   AuthWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -272,7 +269,7 @@ Resources:
       ApiId: !GetAtt AuthApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
       CloudFrontDistribution: !Ref CloudFrontDistribution
-      ApiUrl: !GetAtt AuthApiStack.Outputs.ApiGatewayUrl
+      ApiUrl: !If [ isDNSEnabled, !Sub "https://api-auth-${stage}.${hostedZoneName}",  !GetAtt AuthApiStack.Outputs.ApiGatewayUrl ]
 
   UserApiStack:
     Type: "AWS::CloudFormation::Stack"
@@ -288,7 +285,10 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableApiCDN: !Ref enableApiCDN
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   UserWebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -303,7 +303,7 @@ Resources:
       ApiId: !GetAtt UserApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
       CloudFrontDistribution: !Ref CloudFrontDistribution
-      ApiUrl: !If [ isApiCDNEnabled, !GetAtt UserApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
+      ApiUrl: !If [ isDNSEnabled, !Sub "https://api-user-${stage}.${hostedZoneName}",  !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
 
   SearchApiStack:
     Condition: isOpenSearchEnabled
@@ -320,7 +320,10 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableApiCDN: !Ref enableApiCDN
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   SearchWebACLAssociation:
     Condition: isOpenSearchEnabled
@@ -337,9 +340,16 @@ Resources:
       ApiId: !GetAtt SearchApiStack.Outputs.ApiId
       BucketName: !Ref ApiDefinitionStorage
       CloudFrontDistribution: !Ref CloudFrontDistribution
-      ApiUrl: !If [ isApiCDNEnabled, !GetAtt SearchApiStack.Outputs.CloudFrontDistributionUrl, !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
+      ApiUrl: !If [ isDNSEnabled, !Sub "https://api-search-${stage}.${hostedZoneName}",  !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
 
 Outputs:
-  AuthApiDomain:
-    Description: "Auth API Domain"
-    Value: !GetAtt AuthApiStack.Outputs.ApiDomain
+  AuthApiUrl:
+    Description: "Auth API"
+    Value: !If [ isDNSEnabled, !Sub "https://api-auth-${stage}.${hostedZoneName}",  !GetAtt AuthApiStack.Outputs.ApiGatewayUrl ]
+  UserApiUrl:
+    Description: "User API"
+    Value: !If [ isDNSEnabled, !Sub "https://api-user-${stage}.${hostedZoneName}",  !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
+  SearchApiUrl:
+    Condition: isOpenSearchEnabled
+    Description: "Search API"
+    Value: !If [ isDNSEnabled, !Sub "https://api-search-${stage}.${hostedZoneName}",  !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]

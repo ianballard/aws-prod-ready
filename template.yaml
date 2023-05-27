@@ -74,13 +74,6 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'true'
-  enableApiCDN:
-    Description: "Is CDN for APIGW enabled"
-    Type: String
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'true'
   corsAllowedOrigins:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
@@ -221,11 +214,11 @@ Resources:
         - python3.9
       RetentionPolicy: Delete
 
-  LogsAndMetricsStack:
+  LoggingAndMetricsStack:
     Type: "AWS::CloudFormation::Stack"
     Condition: isPersistentStorageEnabled
     Properties:
-      TemplateURL: template.logs.yaml
+      TemplateURL: template.logging-metrics.yaml
       Parameters:
         stage: !Ref stage
         replicaRegion: !Ref replicaRegion
@@ -288,10 +281,10 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableApiCDN: !Ref enableApiCDN
         enableOpenSearch: !Ref enableOpenSearch
         stackType: !Ref stackType
         appId: !Ref appId
         enableDNS: !Ref enableDNS
         hostedZoneName: !Ref hostedZoneName
         hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription

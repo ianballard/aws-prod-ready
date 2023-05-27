@@ -3,5 +3,5 @@ from core_lib.services.logs import log_service
 
 
 @lambda_handler()
-def log_access_event(event):
+def log_event(event):
     log_service.log_subscribed_log_events(event=event)

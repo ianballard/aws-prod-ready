@@ -64,20 +64,34 @@ Resources:
   AccessLogHandler:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./async/log_management/app_access_log_management
+      CodeUri: ./async/log_management/app_logging
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - AWSXRayDaemonWriteAccess
-      Handler: app_access_logger.log_access_event
+      Handler: logger.log_event
+
+  CloudWatchLogsInvokeAccessLoggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AccessLogHandler.Arn
+      Action: lambda:InvokeFunction
+      Principal: logs.amazonaws.com
 
   ErrorLogHandler:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./async/log_management/app_error_log_management
+      CodeUri: ./async/log_management/app_logging
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - AWSXRayDaemonWriteAccess
-      Handler: app_error_logger.log_error_event
+      Handler: logger.log_event
+
+  CloudWatchLogsInvokeErrorLoggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ErrorLogHandler.Arn
+      Action: lambda:InvokeFunction
+      Principal: logs.amazonaws.com
 
   EnableLogGroupSubscriptionFilters:
     Type: AWS::Serverless::Function

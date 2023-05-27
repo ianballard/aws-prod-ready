@@ -66,13 +66,6 @@ Parameters:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
     Default: ''
-  enableApiCDN:
-    Description: "Is CDN for APIGW enabled"
-    Type: String
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'true'
   enableDNS:
     Description: "Is Route53 DNS enabled"
     Type: String
@@ -88,11 +81,13 @@ Parameters:
     Description: "DNS Hosted Id"
     Type: String
     Default: ''
-
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+    Default: ''
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
-  isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
   isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
 
 Resources:
@@ -122,96 +117,18 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
 
-  AcmCertificate:
+  AuthApiDnsStack:
     Condition: isDNSEnabled
-    Type: AWS::CertificateManager::Certificate
+    Type: "AWS::CloudFormation::Stack"
     Properties:
-      DomainName: !Sub '*.${hostedZoneName}'
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Ref hostedZoneName
-          HostedZoneId: !Ref hostedZoneId
-
-  CustomDomain:
-    Condition: isDNSEnabled
-    Type: AWS::ApiGateway::DomainName
-    Properties:
-      DomainName: !Sub "api-auth-${stage}.${hostedZoneName}"
-      RegionalCertificateArn: !Ref AcmCertificate
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-
-  BasePathMapping:
-    Condition: isDNSEnabled
-    Type: AWS::ApiGateway::BasePathMapping
-    Properties:
-      DomainName: !Ref CustomDomain
-      RestApiId: !Ref ApiGatewayApi
-      Stage: 'Prod'
-
-  HealthCheck:
-    Condition: isDNSEnabled
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      HealthCheckConfig:
-        Type: HTTPS
-        ResourcePath: /Prod/v1.0/health
-        FullyQualifiedDomainName: !Sub "${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com"
-        Port: 443
-        RequestInterval: 30
-        FailureThreshold: 3
-        EnableSNI: true
-        Regions:
-          - us-east-1
-          - us-west-1
-          - us-west-2
-      HealthCheckTags:
-        - Key: 'Name'
-          Value: !Sub 'AuthApiHealthCheck-${AWS::Region}'
-
-  HealthCheckStatusAlarm:
-    Condition: isDNSEnabled
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Health check failed
-      Namespace: AWS/Route53
-      MetricName: HealthCheckStatus
-      Dimensions:
-        - Name: HealthCheckId
-          Value: !Ref HealthCheck
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: LessThanThreshold
-      TreatMissingData: missing
-      AlarmActions:
-        - !Ref HealthCheckSNSAlertTopic
-
-  HealthCheckSNSAlertTopic:
-    Condition: isDNSEnabled
-    Type: AWS::SNS::Topic
-    Properties:
-      DisplayName: Route53HealthCheckAlert
-      Subscription:
-        - Protocol: email
-          Endpoint: ianballard.dev@gmail.com
-
-  ARecordSet:
-    Condition: isDNSEnabled
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref hostedZoneId
-      Name: !Sub "api-auth-${stage}.${hostedZoneName}"
-      Type: A
-      SetIdentifier: !Sub "auth-${stage}-${AWS::Region}"
-      Region: !Ref AWS::Region
-      AliasTarget:
-        DNSName: !GetAtt CustomDomain.RegionalDomainName
-        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
-        EvaluateTargetHealth: true
-      HealthCheckId: !Ref HealthCheck
+      TemplateURL: template.dns.api.yaml
+      Parameters:
+        apiGatewayId: !Ref ApiGatewayApi
+        apiName: 'auth'
+        stage: !Ref stage
+        hostedZoneId: !Ref hostedZoneId
+        hostedZoneName: !Ref hostedZoneName
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   ApiGatewayApi:
     Type: AWS::Serverless::Api

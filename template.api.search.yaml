@@ -66,17 +66,29 @@ Parameters:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
     Default: ''
-  enableApiCDN:
-    Description: "Is CDN for APIGW enabled"
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
     Type: String
     AllowedValues:
       - 'true'
       - 'false'
-    Default: 'true'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+    Default: ''
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
-  isApiCDNEnabled: !Equals [ !Ref enableApiCDN, 'true' ]
+  isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
 
 Resources:
 
@@ -104,6 +116,19 @@ Resources:
   ApiGatewayApiAccessLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
+
+  SearchApiDnsStack:
+    Condition: isDNSEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.dns.api.yaml
+      Parameters:
+        apiGatewayId: !Ref ApiGatewayApi
+        apiName: 'search'
+        stage: !Ref stage
+        hostedZoneId: !Ref hostedZoneId
+        hostedZoneName: !Ref hostedZoneName
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   ApiGatewayApi:
     Type: AWS::Serverless::Api
@@ -242,48 +267,6 @@ Resources:
               validateRequestBody: true
               validateRequestParameters: true
 
-  CloudFrontDistribution:
-    Condition: isApiCDNEnabled
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Comment: !Sub '${stage} Search APIGW'
-        DefaultCacheBehavior:
-          AllowedMethods:
-            - DELETE
-            - GET
-            - HEAD
-            - OPTIONS
-            - PATCH
-            - POST
-            - PUT
-          CachedMethods:
-            - HEAD
-            - GET
-          Compress: true
-          DefaultTTL: 0
-          ForwardedValues:
-            Headers:
-              - Authorization
-              - User-Agent
-              - Origin
-            QueryString: true
-          TargetOriginId: apigwOrigin
-          ViewerProtocolPolicy: redirect-to-https
-        Enabled: true
-        HttpVersion: http2
-        IPV6Enabled: true
-        Origins:
-          - CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: https-only
-              OriginSSLProtocols:
-                - TLSv1.2
-            DomainName: !Sub '${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com'
-            Id: apigwOrigin
-        PriceClass: PriceClass_100
-
   HealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -331,9 +314,6 @@ Outputs:
   ApiGatewayUrl:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
-  CloudFrontDistributionUrl:
-    Value: !If [ isApiCDNEnabled, !Join [ '', [ 'https://', !GetAtt [ CloudFrontDistribution, DomainName ], '/Prod' ] ], "" ]
-    Description: URL of the CloudFront distribution
   SearchUsersFunctionArn:
     Description: "SearchUsersFunction ARN"
     Value: !GetAtt SearchUsersFunction.Arn
