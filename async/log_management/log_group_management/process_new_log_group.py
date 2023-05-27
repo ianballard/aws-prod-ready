@@ -25,9 +25,7 @@ def handle_new_log_group_created(event):
         )
         return
 
-    log_info(
-        f"creating error log subscription filter for {new_log_group_name}."
-    )
+    log_info(f"creating error log subscription filter for {new_log_group_name}.")
     # TODO check to see if the log group lambda belongs to the same stack or move central logging lambdas to long lived resources
     # put_subscription_filter(
     #     log_group=new_log_group_name,
@@ -41,9 +39,7 @@ def handle_new_log_group_created(event):
         f"/aws/lambda/{get_lambda_function_name(access_log_destination_arn)}"
         != new_log_group_name
     ):
-        log_info(
-            f"creating access log subscription filter for {new_log_group_name}."
-        )
+        log_info(f"creating access log subscription filter for {new_log_group_name}.")
         # put_subscription_filter(
         #     log_group=new_log_group_name,
         #     destination_arn=access_log_destination_arn,
