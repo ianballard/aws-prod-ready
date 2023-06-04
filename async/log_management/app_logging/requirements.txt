@@ -1,2 +1,5 @@
+PyJWT==2.6.0
+requests==2.25.1
+cryptography==39.0.2
 aws-xray-sdk==0.96
 jsonschema==4.17.3

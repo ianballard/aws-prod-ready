@@ -16,41 +16,50 @@ def handle_new_log_group_created(event):
         return
 
     error_log_destination_arn = os.getenv("APP_ERROR_LOGGER_FUNCTION_ARN")
-    if (
-        new_log_group_name
-        == f"/aws/lambda/{get_lambda_function_name(error_log_destination_arn)}"
+    access_log_destination_arn = os.getenv("APP_ACCESS_LOGGER_FUNCTION_ARN")
+    error_log_group_name = build_log_group_name_from_arn(error_log_destination_arn)
+    access_log_group_name = build_log_group_name_from_arn(access_log_destination_arn)
+
+    if should_ignore_log_group(
+        new_log_group_name=new_log_group_name,
+        access_log_group_name=access_log_group_name,
+        error_log_group_name=error_log_group_name,
     ):
         log_info(
-            "new log group is the error log target destination. skipping subscription filter creation."
+            f"new log group is a log target destination. skipping subscription filter creation. "
+            f"new_log_group_name: {new_log_group_name} "
+            f"access_log_group_name: {access_log_group_name} "
+            f"error_log_group_name: {error_log_group_name}"
         )
         return
 
-    log_info(f"creating error log subscription filter for {new_log_group_name}.")
-    # TODO check to see if the log group lambda belongs to the same stack or move central logging lambdas to long lived resources
-    # put_subscription_filter(
-    #     log_group=new_log_group_name,
-    #     destination_arn=error_log_destination_arn,
-    #     filter_name="error_log_filter",
-    #     filter_pattern="APP_ERROR_LOG",
-    # )
+    put_subscription_filter(
+        log_group=new_log_group_name,
+        destination_arn=error_log_destination_arn,
+        filter_name="error_log_filter",
+        filter_pattern="APP_ERROR_LOG",
+    )
 
-    access_log_destination_arn = os.getenv("APP_ACCESS_LOGGER_FUNCTION_ARN")
-    if (
-        f"/aws/lambda/{get_lambda_function_name(access_log_destination_arn)}"
-        != new_log_group_name
-    ):
-        log_info(f"creating access log subscription filter for {new_log_group_name}.")
-        # put_subscription_filter(
-        #     log_group=new_log_group_name,
-        #     destination_arn=access_log_destination_arn,
-        #     filter_name="access_log_filter",
-        #     filter_pattern="APP_ACCESS_LOG",
-        # )
-    else:
-        log_info(
-            "new log group is the access log target destination. skipping subscription filter creation."
-        )
+    put_subscription_filter(
+        log_group=new_log_group_name,
+        destination_arn=access_log_destination_arn,
+        filter_name="access_log_filter",
+        filter_pattern="APP_ACCESS_LOG",
+    )
 
 
 def get_lambda_function_name(arn):
     return arn.split(":")[-1]
+
+
+def should_ignore_log_group(
+    new_log_group_name: str, access_log_group_name: str, error_log_group_name: str
+):
+    return (
+        new_log_group_name == access_log_group_name
+        or new_log_group_name == error_log_group_name
+    )
+
+
+def build_log_group_name_from_arn(arn: str):
+    return f"/aws/lambda/{get_lambda_function_name(arn)}"
