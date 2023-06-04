@@ -12,7 +12,7 @@ from core_lib.utils.lambda_util import lambda_handler
 
 
 @lambda_handler()
-@api()
+@api(skip_access_log=True)
 def health(api_request: ApiRequest):
     auth_service.health_check()
 
@@ -22,7 +22,7 @@ def health(api_request: ApiRequest):
         request_headers=api_request.headers,
         status_code=200,
         response_body=None,
-    ).format()
+    ).format(skip_access_log=True)
 
 
 @lambda_handler()

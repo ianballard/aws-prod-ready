@@ -14,7 +14,7 @@ from core_lib.utils.thread_util import safe_get_thread_attribute
 
 
 @lambda_handler()
-@api()
+@api(skip_access_log=True)
 def health(api_request: ApiRequest):
     auth_service.health_check()
 
@@ -24,7 +24,7 @@ def health(api_request: ApiRequest):
         request_headers=api_request.headers,
         status_code=200,
         response_body=None,
-    ).format()
+    ).format(skip_access_log=True)
 
 
 @lambda_handler()
