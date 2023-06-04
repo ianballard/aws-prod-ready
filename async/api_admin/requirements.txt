@@ -1,3 +1,3 @@
-requests==2.25.1
+requests==2.31.0
 aws-xray-sdk==0.96
 jsonschema==4.17.3
