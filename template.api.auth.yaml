@@ -408,6 +408,7 @@ Resources:
     Properties:
       CodeUri: api/auth/
       Handler: auth_controller.health
+      Tracing: !Ref AWS::NoValue
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - AmazonSSMReadOnlyAccess

@@ -272,6 +272,7 @@ Resources:
     Properties:
       CodeUri: api/search/
       Handler: search_controller.health
+      Tracing: !Ref AWS::NoValue
       Policies:
         - AWSLambdaVPCAccessExecutionRole
         - AmazonSSMReadOnlyAccess
