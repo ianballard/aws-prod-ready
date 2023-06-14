@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from api.user import user_controller
 from api_lib.response.api_response import ApiResponse
