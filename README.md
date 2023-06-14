@@ -27,19 +27,21 @@ The full list of configurations for this project and their descriptions are as f
 
 - `stage`: The environment stage (e.g., dev, staging, prod, or test-1, test-2, etc. for ephemeral environments).
 - `replicaRegion`: The secondary AWS region where replicas and backups will be stored.
-- `appId`: A unique identifier used for creating S3 bucket names.
-- `dbTableName`: The name of the DynamoDB table.
-- `stackType`: Determines whether the stack is a primary or secondary (replica) region.
-- `enablePersistentStorage`: Enables or disables persistent storage (set to true for long-lived environments, false for ephemeral environments).
-- `enableVPC`: Enables or disables the use of a Virtual Private Cloud (VPC).
-- `enableOpenSearch`: Enables or disables the use of AWS OpenSearch Service.
-- `enableS3Replication`: Enables or disables Amazon S3 bucket replication.
-- `enableAWSAuth`: Enables or disables AWS authentication using Amazon Cognito.
-- `enableBackup`: Enables or disables AWS Backup for creating and managing backups.
-- `enableSecurity`: Enables or disables security features such as AWS Security Hub, GuardDuty, and Config.
-- `enableApiCDN`: Enables or disables the use of a Content Delivery Network (CDN) for the API Gateway (this can be set to false for quicker ephemeral environment deployments).
-- `corsAllowedOrigins`: Specifies the allowed origins for CORS (Cross-Origin Resource Sharing) headers.
+- `appId`: A unique identifier used for creating S3 bucket names. It should not contain any special characters and should be in all lowercase.
+- `dbTableName`: The name of the DynamoDB table. Defaults to "DBTable" if not specified.
+- `stackType`: Determines whether the stack is a primary or secondary (replica) region. The allowed values are 'primary' and 'secondary'. Defaults to 'primary' if not specified.
+- `enablePersistentStorage`: Enables or disables persistent storage. Set to 'true' for long-lived environments such as dev, release, and prod, and 'false' for ephemeral environments. Defaults to 'true' if not specified.
+- `enableVPC`: Enables or disables the use of a Virtual Private Cloud (VPC). The allowed values are 'true', 'false', and 'null'. Defaults to 'false' if not specified.
+- `enableOpenSearch`: Enables or disables the use of AWS OpenSearch Service. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
+- `enableS3Replication`: Enables or disables Amazon S3 bucket replication. Please note that buckets must exist. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
+- `enableAWSAuth`: Enables or disables AWS authentication using Amazon Cognito. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
+- `enableBackup`: Enables or disables AWS Backup for creating and managing backups. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
+- `enableSecurity`: Enables or disables security features such as AWS Security Hub, GuardDuty, and Config. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
+- `corsAllowedOrigins`: Specifies the allowed origins for CORS (Cross-Origin Resource Sharing) headers. Defaults to empty if not specified.
 - `emailDistributionSubscription`: Specifies the email distribution list for receiving alerts related to the project like error alarms.
+- `enableDNS`: Enables or disables the use of AWS Route53 DNS. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
+- `hostedZoneName`: Specifies the DNS Hosted Zone. Defaults to empty if not specified.
+- `hostedZoneId`: Specifies the DNS Hosted Id. Defaults to empty if not specified.
 
 ## Features
 
@@ -51,6 +53,19 @@ help you set up a robust and secure infrastructure:
 The template is designed with a serverless architecture in mind, utilizing AWS API Gateway for creating, publishing, 
 and managing APIs, AWS Lambda for running your code without provisioning or managing servers, and DynamoDB as a 
 managed NoSQL database.
+
+### Latency-based Multi-region and Fail-over Support with DNS Health Checks
+
+The template provides a robust mechanism to ensure optimal user experience and high availability by utilizing AWS Route53 for latency-based routing and DNS health checks. 
+
+This feature is designed to deliver your application with minimal latency and enhanced reliability. By hosting your application in multiple AWS regions, latency-based routing allows Route53 to direct user requests to the region that provides the lowest latency, ensuring faster load times for your users.
+
+Alongside latency-based routing, DNS health checks are used to monitor the health and performance of your application's endpoints. If an endpoint becomes unhealthy - for instance, in case of a regional outage or an issue with your application - Route53's failover mechanism is triggered. 
+
+The failover routing policy automatically redirects the traffic to a healthy region, thereby ensuring uninterrupted availability of your application. This feature makes it possible to provide reliable service to your users, even in the face of unforeseen outages or performance issues.
+
+This combination of latency-based routing and DNS health checks provides an efficient multi-region strategy, enhancing the resilience and performance of your infrastructure.
+
 
 ### Event-Driven Architecture
 
