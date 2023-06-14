@@ -137,7 +137,7 @@ def test_delete(mock_get_decoded_jwt, user_data_access, safe_get_thread_attribut
 @patch("api.user.user_controller.user_association_data_access")
 @patch("api_lib.auth.authorization.user_data_access")
 @patch("api_lib.auth.authorization.get_decoded_jwt")
-def test_delete(
+def test_associate(
     mock_get_decoded_jwt,
     user_data_access,
     user_association_data_access,

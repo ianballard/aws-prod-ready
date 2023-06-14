@@ -3,7 +3,6 @@ from unittest.mock import patch
 
 from api.search import search_controller
 from api_lib.response.api_response import ApiResponse
-from core_lib.utils.json_schema_util import ACTIVE_STATUS, INACTIVE_STATUS
 
 
 @patch("api.search.search_controller.auth_service")
