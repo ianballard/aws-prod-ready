@@ -423,19 +423,45 @@ Resources:
             Path: /v1.0/health
             Method: get
 
-  # TODO update policies
+  SignUpFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SignUpFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'sqs:SendMessage'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                  - 'cognito-idp:SignUp'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   SignUpFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/auth/
       Handler: auth_controller.signup
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt SignUpFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -444,18 +470,37 @@ Resources:
             Path: /v1.0/signup
             Method: post
 
-  # TODO update policies
+  AuthenticateFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthenticateFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                  - 'cognito-idp:InitiateAuth'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   AuthenticateFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/auth/
       Handler: auth_controller.authenticate
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AmazonSQSFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt AuthenticateFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -464,17 +509,43 @@ Resources:
             Path: /v1.0/auth
             Method: post
 
+  ConfirmSignUpFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfirmSignUpFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sqs:SendMessage'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                  - 'cognito-idp:AdminEnableUser'
+                  - 'cognito-idp:ConfirmSignUp'
+                  - 'cognito-idp:AdminUpdateUserAttributes'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   ConfirmSignUpFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/auth/
       Handler: auth_controller.confirm_sign_up
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AmazonSQSFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt ConfirmSignUpFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
