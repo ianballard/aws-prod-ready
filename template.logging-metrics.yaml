@@ -149,50 +149,200 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt LogGroupCreationEventRule.Arn
 
-  LambdaInvocationsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: "Trigger an alarm if the number of Lambda invocations exceeds the threshold"
-      Namespace: "AWS/Lambda"
-      MetricName: "Invocations"
-      Statistic: "Sum"
-      Period: 60 # 1 minute
-      EvaluationPeriods: 1
-      Threshold: !Ref lambdaInvocationThreshold
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions:
-        - Ref: LambdaInvocationsSNSAlertsTopic
-
-  LambdaInvocationsSNSAlertsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      DisplayName: "Lambda Invocations Alarm"
-      Subscription:
-        - Protocol: email
-          Endpoint: !Ref emailDistributionSubscription
-
   AppErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: "Trigger an alarm if the number of Lambda invocations exceeds the threshold"
+      AlarmDescription: "Trigger an alarm if the number of app errors exceeds the threshold"
       Namespace: "AWS/Lambda"
-      MetricName: "Invocations"
+      MetricName: "AppErrors"
       Dimensions:
         - Name: FunctionName
           Value: !Ref ErrorLogHandler
       Statistic: "Sum"
-      Period: 60 # 1 minute
+      Period: 60
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       AlarmActions:
-        - !Ref AppErrorsSNSAlertsTopic
+        - !Ref MetricAlarmSNSAlertsTopic
 
-  AppErrorsSNSAlertsTopic:
+  MetricAlarmSNSAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      DisplayName: "App Error Alarm"
+      DisplayName: "Metric Alarm SNS Alerts Topic"
       Subscription:
         - Protocol: email
           Endpoint: !Ref emailDistributionSubscription
+
+  LambdaInvocationsAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Stat: Sum
+
+  LambdaInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda invocations
+      AlarmName: LambdaInvocationsAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 3)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+            Period: !!int 900
+            Stat: Sum
+      ThresholdMetricId: ad1
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  LambdaDurationAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Stat: Average
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda duration
+      AlarmName: LambdaDurationAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m2, 3)
+          Id: ad2
+        - Id: m2
+          MetricStat:
+            Metric:
+              MetricName: Duration
+              Namespace: AWS/Lambda
+            Period: !!int 3600
+            Stat: Average
+      ThresholdMetricId: ad2
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Lambda error"
+      Namespace: "AWS/Lambda"
+      MetricName: "Errors"
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Lambda throttles"
+      Namespace: "AWS/Lambda"
+      MetricName: "Throttles"
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  DynamoDBReadAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: ConsumedReadCapacityUnits
+      Namespace: AWS/DynamoDB
+      Stat: Sum
+
+  DynamoDBReadAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Read
+      AlarmName: DynamoDBReadAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m3, 3)
+          Id: ad3
+        - Id: m3
+          MetricStat:
+            Metric:
+              MetricName: ConsumedReadCapacityUnits
+              Namespace: AWS/DynamoDB
+            Period: !!int 900
+            Stat: Sum
+      ThresholdMetricId: ad3
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  DynamoDBWriteAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: ConsumedWriteCapacityUnits
+      Namespace: AWS/DynamoDB
+      Stat: Sum
+
+  DynamoDBWriteAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Write
+      AlarmName: DynamoDBWriteAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m4, 3)
+          Id: ad4
+        - Id: m4
+          MetricStat:
+            Metric:
+              MetricName: ConsumedWriteCapacityUnits
+              Namespace: AWS/DynamoDB
+            Period: !!int 900
+            Stat: Sum
+      ThresholdMetricId: ad4
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  DynamoDBReadThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Read Throttle
+      Namespace: AWS/DynamoDB
+      MetricName: ReadThrottleEvents
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  DynamoDBWriteThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Write Throttle
+      Namespace: AWS/DynamoDB
+      MetricName: WriteThrottleEvents
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
