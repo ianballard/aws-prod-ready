@@ -279,6 +279,8 @@ Resources:
         - AmazonCognitoPowerUser
         - AWSXRayDaemonWriteAccess
         - AmazonOpenSearchServiceFullAccess
+      Tags:
+        function_role: search_read_function
       Events:
         ApiEvent:
           Type: Api

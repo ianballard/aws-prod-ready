@@ -180,7 +180,7 @@ Resources:
     Properties:
       MetricName: Invocations
       Namespace: AWS/Lambda
-      Stat: Sum
+      Stat: Average
 
   LambdaInvocationsAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -190,7 +190,7 @@ Resources:
       ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
       EvaluationPeriods: 1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m1, 3)
+        - Expression: ANOMALY_DETECTION_BAND(m1, 2)
           Id: ad1
         - Id: m1
           MetricStat:
@@ -198,7 +198,7 @@ Resources:
               MetricName: Invocations
               Namespace: AWS/Lambda
             Period: !!int 900
-            Stat: Sum
+            Stat: Average
       ThresholdMetricId: ad1
       AlarmActions:
         - Ref: MetricAlarmSNSAlertsTopic
@@ -218,7 +218,7 @@ Resources:
       ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
       EvaluationPeriods: 1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m2, 3)
+        - Expression: ANOMALY_DETECTION_BAND(m2, 2)
           Id: ad2
         - Id: m2
           MetricStat:
@@ -266,7 +266,7 @@ Resources:
     Properties:
       MetricName: ConsumedReadCapacityUnits
       Namespace: AWS/DynamoDB
-      Stat: Sum
+      Stat: Average
 
   DynamoDBReadAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -276,7 +276,7 @@ Resources:
       ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
       EvaluationPeriods: 1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m3, 3)
+        - Expression: ANOMALY_DETECTION_BAND(m3, 2)
           Id: ad3
         - Id: m3
           MetricStat:
@@ -284,7 +284,7 @@ Resources:
               MetricName: ConsumedReadCapacityUnits
               Namespace: AWS/DynamoDB
             Period: !!int 900
-            Stat: Sum
+            Stat: Average
       ThresholdMetricId: ad3
       AlarmActions:
         - Ref: MetricAlarmSNSAlertsTopic
@@ -294,7 +294,7 @@ Resources:
     Properties:
       MetricName: ConsumedWriteCapacityUnits
       Namespace: AWS/DynamoDB
-      Stat: Sum
+      Stat: Average
 
   DynamoDBWriteAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -304,7 +304,7 @@ Resources:
       ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
       EvaluationPeriods: 1
       Metrics:
-        - Expression: ANOMALY_DETECTION_BAND(m4, 3)
+        - Expression: ANOMALY_DETECTION_BAND(m4, 2)
           Id: ad4
         - Id: m4
           MetricStat:
@@ -312,7 +312,7 @@ Resources:
               MetricName: ConsumedWriteCapacityUnits
               Namespace: AWS/DynamoDB
             Period: !!int 900
-            Stat: Sum
+            Stat: Average
       ThresholdMetricId: ad4
       AlarmActions:
         - Ref: MetricAlarmSNSAlertsTopic
