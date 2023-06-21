@@ -353,3 +353,6 @@ Outputs:
     Condition: isOpenSearchEnabled
     Description: "Search API"
     Value: !If [ isDNSEnabled, !Sub "https://api-search-${stage}.${hostedZoneName}",  !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
+  ApiDefinitionStorageCDN:
+    Description: "CDN Domain Name for hosted API definitions"
+    Value: !GetAtt CloudFrontDistribution.DomainName

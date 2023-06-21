@@ -403,18 +403,41 @@ Resources:
               validateRequestBody: true
               validateRequestParameters: true
 
+  HealthCheckFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthHealthCheckFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   HealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/auth/
       Handler: auth_controller.health
       Tracing: !Ref AWS::NoValue
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AWSXRayDaemonWriteAccess
-        - AmazonDynamoDBFullAccess
+      Role: !GetAtt HealthCheckFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api

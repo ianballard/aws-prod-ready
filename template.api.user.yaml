@@ -428,18 +428,41 @@ Resources:
                 validateRequestBody: true
                 validateRequestParameters: true
 
+  HealthCheckFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: UserHealthCheckFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   HealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
       Handler: user_controller.health
       Tracing: !Ref AWS::NoValue
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AWSXRayDaemonWriteAccess
-        - AmazonDynamoDBFullAccess
+      Role: !GetAtt HealthCheckFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -448,17 +471,37 @@ Resources:
             Path: /v1.0/health
             Method: get
 
+  QueryUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: QueryUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchGetItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   QueryUserFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
       Handler: user_controller.query
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt QueryUserFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -467,17 +510,38 @@ Resources:
             Path: /v1.0/user
             Method: get
 
+  GetUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GetUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchGetItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   GetUserFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
       Handler: user_controller.get
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt GetUserFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -486,17 +550,36 @@ Resources:
             Path: /v1.0/user/{id}
             Method: get
 
+  UpdateUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: UpdateUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:UpdateItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   UpdateUserFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
       Handler: user_controller.update
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt UpdateUserFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -505,17 +588,36 @@ Resources:
             Path: /v1.0/user/{id}
             Method: patch
 
+  DeleteUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DeleteUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:UpdateItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   DeleteUserFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
       Handler: user_controller.delete
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt DeleteUserFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
@@ -524,18 +626,38 @@ Resources:
             Path: /v1.0/user/{id}
             Method: delete
 
+  AssociateUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AssociateUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+
   AssociateUserFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/user/
       Handler: user_controller.associate
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonSQSFullAccess
-        - AmazonDynamoDBFullAccess
-        - AmazonCognitoPowerUser
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt AssociateUserFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
