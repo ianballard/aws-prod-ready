@@ -211,12 +211,27 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
+      Policies:
+        - PolicyName: OpenSearchAdminCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'es:ESHttpPost'
+                  - 'es:ESHttpGet'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'tag:GetResources'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'lambda:GetFunction'
+                Resource: '*'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
         - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
-        - arn:aws:iam::aws:policy/AmazonOpenSearchServiceFullAccess
-        - arn:aws:iam::aws:policy/AWSLambda_FullAccess
-        - arn:aws:iam::aws:policy/ResourceGroupsandTagEditorReadOnlyAccess
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 

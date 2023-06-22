@@ -267,18 +267,41 @@ Resources:
               validateRequestBody: true
               validateRequestParameters: true
 
+  HealthCheckFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SearchHealthCheckFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'es:ESHttpGet'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   HealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/search/
       Handler: search_controller.health
       Tracing: !Ref AWS::NoValue
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonCognitoPowerUser
-        - AWSXRayDaemonWriteAccess
-        - AmazonOpenSearchServiceFullAccess
+      Role: !GetAtt HealthCheckFunctionRole.Arn
       Tags:
         function_role: search_read_function
       Events:
@@ -289,17 +312,37 @@ Resources:
             Path: /v1.0/health
             Method: get
 
-  # TODO update policies
+  SearchUsersFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SearchUsersFunctionCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'es:ESHttpGet'
+                  - 'es:ESHttpPost'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   SearchUsersFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: api/search/
       Handler: search_controller.search_users
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonOpenSearchServiceFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt SearchUsersFunctionRole.Arn
       Tags:
         function_role: search_read_function
       Events:

@@ -187,17 +187,44 @@ Resources:
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
 
+  ManageApiExportsFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ManageApiExportsFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'apigateway:GetRestApi'
+                  - 'apigateway:GetExport'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cloudfront:CreateInvalidation'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   ManageApiExportsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./async/api_admin
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonSSMReadOnlyAccess
-        - AmazonS3FullAccess
-        - AmazonAPIGatewayAdministrator
-        - AWSXRayDaemonWriteAccess
-        - CloudFrontFullAccess
+      Role: !GetAtt ManageApiExportsFunctionRole.Arn
       Handler: api_admin_functions.manage_api_exports
 
   WebACLWithAMR:

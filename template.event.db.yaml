@@ -65,34 +65,77 @@ Globals:
 
 Resources:
 
+  DBStreamRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DBStreamRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'firehose:PutRecord'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'es:ESHttpPost'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   DBStream:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./async/database_event
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AWSLambdaDynamoDBExecutionRole
-        - AmazonESFullAccess
-        - AmazonSSMReadOnlyAccess
-        - AmazonDynamoDBFullAccess
-        - AmazonSQSFullAccess
-        - AmazonKinesisFirehoseFullAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt DBStreamRole.Arn
       Handler: database_event_handler.handle_db_event
       Timeout: 900
       Tags:
         function_role: search_write_function
 
+  CreateDBStreamEventTriggerFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CreateDBStreamEventTriggerFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'lambda:CreateEventSourceMapping'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
   CreateDBStreamEventTriggerFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./async/database_event
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - AmazonDynamoDBFullAccess
-        - AWSLambda_FullAccess
-        - AmazonSSMReadOnlyAccess
-        - AWSXRayDaemonWriteAccess
+      Role: !GetAtt CreateDBStreamEventTriggerFunctionRole.Arn
       Handler: db_admin_functions.create_trigger
       Environment:
         Variables:
