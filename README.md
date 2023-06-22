@@ -10,8 +10,9 @@ serverless architecture, event-driven architecture, and it focuses on best pract
 3. [Prerequisites](#prerequisites)
 4. [Installation](#installation)
 5. [Usage](#usage)
-6. [Contributing](#contributing)
-7. [License](#license)
+6. [Trouble-Shooting](#trouble-shooting)
+7. [Contributing](#contributing)
+8. [License](#license)
 
 ## Introduction
 
@@ -78,6 +79,8 @@ The template is designed to consume, process, and send DynamoDB stream events to
 - AWS OpenSearch Service, for indexing, searching, and analyzing large volumes of data.
 - Amazon Kinesis Data Firehose, for reliably loading streaming data into data lakes, and analytics services.
 
+**NOTE: If the DB Event Stack is deployed and the events are not being processed, there was likely a problem with the Custom Resource execution that is supposed to enable the lambda's trigger. Please Refer to the Custom Resource Trouble Shooting section for more details.** 
+
 #### Multi-Region AWS Cognito Service
 
 The template replicates authentication events to replica regions, creating a multi-region AWS Cognito service. This ensures that your authentication service is highly available and fault-tolerant, providing consistent performance and reliability for your users.
@@ -135,6 +138,8 @@ The AWS Production-Ready Starter Template also includes several pre-built APIs t
 
 3. **Search API** (available if OpenSearch is enabled): This API allows you to search for users based on various attributes, such as username, email, first name, or last name. It provides a single endpoint for submitting search queries.
 
+**NOTE: If the Open Search Stack is deployed and the search operations are not working or documents are not being posted, there was likely a problem with the Custom Resource executions that are supposed to update the cluster permissions, index creation, and logging settings. Please Refer to the Custom Resource Trouble Shooting section for more details.**
+
 Each endpoint in the User Management and Search APIs is equipped with authorization models to determine if the principal user can access the requested resources. This ensures that your application enforces appropriate access controls and maintains user privacy.
 
 These pre-built APIs can significantly accelerate the development process by providing a solid foundation for common functionality in your application.
@@ -143,11 +148,13 @@ These pre-built APIs can significantly accelerate the development process by pro
 
 The template includes automatic generation of OpenAPI specifications from API Gateway definitions. These specifications are published to an Amazon CloudFront distribution, making it easy for developers to access and maintain up-to-date documentation for your API. This feature streamlines the process of keeping your API documentation in sync with your actual API implementation, ensuring that developers always have accurate and up-to-date information about your API's capabilities and usage. Assuming the API stacks have been deployed, follow these steps to view the api definitions with a SwaggerUI:
 
-1. Set the CloudFront distribution: After deploying the stack, locate the CloudFront distribution URL that serves the API definitions. Update the client/api-docs/.env file with the appropriate distribution URL.
+1. Set the CloudFront distribution: After deploying the stack, locate the CloudFront distribution URL that serves the API definitions. This should be an output of the API Stack. Update the client/api-docs/.env file with the appropriate distribution URL.
 
 2. Install dependencies: Navigate to the client/api-docs directory and run npm install to install the required dependencies for the API documentation viewer.
 
 3. Start the documentation viewer: From the client/api-docs directory, run npm start to start the documentation viewer. This will open a local development server in your default web browser, allowing you to interact with the auto-generated API documentation.
+
+**NOTE: If the API Stack is deployed and the API specs are not generated or out of date, there was likely a problem with the Custom Resource executions that are supposed to create/update the OpenAPI specifications. Please Refer to the Custom Resource Trouble Shooting section for more details.**
 
 ### GitHub Actions Workflows
 
@@ -512,11 +519,40 @@ Next, you can use AWS Serverless Application Repository to deploy ready to use A
    ```
    Replace `{id}` with the user's ID.
 
+## Trouble-Shooting
+
+### Custom Resource Trouble Shooting
+
+If a Custom Resource did not execute as expected. Simply check it's expected properties in its parent cloudformation 
+template, and execute the underlying lambda function manually with these defined in a ResourceProperties object. 
+Additionally, check the lambda code to see what RequestType (Create, Update, Delete) should be set to. An example input 
+might look like this:
+
+```json
+{
+  "RequestType": "Create",
+   "ResourceProperties": {
+      "foo": "bar"
+   }
+}
+```
+
+The list of Custom Resources are:
+
+- ExecuteManageAuthApiExportsFunction
+- ExecuteManageUserApiExportsFunction
+- ExecuteManageSearchApiExportsFunction
+- ExecuteCreateDBStreamEventTriggerFunction
+- ExecuteSearchAdminAssignWriteAccessFunction
+- ExecuteSearchAdminEnableLoggingFunction
+- ExecuteSearchAdminCreateUserIndexFunction
+
 ## Contributing
 
 Pull requests are welcome for bugfixes and new features. Please only create pull requests targeting the develop branch and use gitflow naming conventions. 
 - New Features: feature/YourFeatureName
 - Fixes: bugfix/FixName
+
 
 ## License
 
