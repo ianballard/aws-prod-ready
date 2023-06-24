@@ -31,10 +31,16 @@ Parameters:
   emailDistributionSubscription:
     Description: "Email distribution of who gets notified of alerts"
     Type: String
-  lambdaInvocationThreshold:
-    Description: "Max number of invocations in a given 1 minute period"
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
     Type: String
-    Default: '100'
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
 
 
 Conditions:
@@ -93,7 +99,33 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: logs.amazonaws.com
 
-  EnableLogGroupSubscriptionFilters:
+  LogsKmsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: KMS key for logs encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow Logs Service to Use the Key
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: '*'
+
+  NewLogGroupCreatedHandler:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: async/log_management/log_group_management
@@ -102,9 +134,10 @@ Resources:
         Variables:
           "APP_ACCESS_LOGGER_FUNCTION_ARN": !GetAtt AccessLogHandler.Arn
           "APP_ERROR_LOGGER_FUNCTION_ARN": !GetAtt ErrorLogHandler.Arn
-      Role: !GetAtt EnableLogGroupSubscriptionFiltersRole.Arn
+          "LOGS_KMS_KEY_ARN": !GetAtt LogsKmsKey.Arn
+      Role: !GetAtt NewLogGroupCreatedHandlerRole.Arn
 
-  EnableLogGroupSubscriptionFiltersRole:
+  NewLogGroupCreatedHandlerRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -117,13 +150,15 @@ Resources:
             Action:
               - sts:AssumeRole
       Policies:
-        - PolicyName: EnableLogGroupSubscriptionFiltersRoleCustomPolicy
+        - PolicyName: NewLogGroupCreatedHandlerRoleCustomPolicy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
               - Effect: Allow
                 Action:
                   - 'logs:PutSubscriptionFilter'
+                  - 'logs:PutRetentionPolicy'
+                  - 'logs:AssociateKmsKey'
                 Resource: '*'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
@@ -146,16 +181,104 @@ Resources:
             - CreateLogGroup
       State: ENABLED
       Targets:
-        - Arn: !GetAtt EnableLogGroupSubscriptionFilters.Arn
+        - Arn: !GetAtt NewLogGroupCreatedHandler.Arn
           Id: LogGroupLambdaFunctionTarget
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !GetAtt EnableLogGroupSubscriptionFilters.Arn
+      FunctionName: !GetAtt NewLogGroupCreatedHandler.Arn
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt LogGroupCreationEventRule.Arn
+
+  LogBackupBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'log-backups/'
+
+  LogBackupBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref LogBackupBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudWatchLogsToPutObject
+            Effect: Allow
+            Principal:
+              Service: 'logs.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${LogBackupBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: AllowCloudWatchLogsGetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: 'logs.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${LogBackupBucket}'
+
+  ExportLogGroupJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: async/log_management/log_group_management
+      Handler: export_log_group.create_export
+      Environment:
+        Variables:
+          "LOG_BACKUP_BUCKET": !Ref LogBackupBucket
+      Role: !GetAtt ExportLogGroupJobRole.Arn
+      Events:
+        AppAccessLogExport:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 * * ? *)
+            Description: Export App Access Logs
+            Enabled: True
+            Input: !Sub
+            - '{"function_log_group_arn": "${AccessLogHandlerArn}", "days_to_include": 1}'
+            - AccessLogHandlerArn: !GetAtt AccessLogHandler.Arn
+
+  ExportLogGroupJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: NewLogGroupCreatedHandlerRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateExportTask'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
 
   AppErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -170,7 +293,7 @@ Resources:
       Period: 60
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
-      Threshold: 1
+      Threshold: 2
       ComparisonOperator: GreaterThanOrEqualToThreshold
       AlarmActions:
         - !Ref MetricAlarmSNSAlertsTopic
@@ -249,7 +372,7 @@ Resources:
       Period: 60
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
-      Threshold: 1
+      Threshold: 2
       ComparisonOperator: GreaterThanOrEqualToThreshold
       AlarmActions:
         - !Ref MetricAlarmSNSAlertsTopic

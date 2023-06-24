@@ -318,6 +318,8 @@ Build your application with the `sam build --use-container` command.
 sam build --use-container --template-file template.local.yaml 
 ```
 
+The template.local.yaml is not a complete set of app resources, for our purposes it is meant to test individual lambdas and endpoints, not the entire stack in its entirety. Please add or remove functions and api events to your own liking.
+
 For each AWS::Serverless::Function defined in the template file, the SAM CLI installs dependencies defined in it's `requirements.txt`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
 
 

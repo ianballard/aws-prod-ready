@@ -227,6 +227,8 @@ Resources:
         vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
         enableVPC: !Ref enableVPC
         emailDistributionSubscription: !Ref emailDistributionSubscription
+        stackType: !Ref stackType
+        appId: !Ref appId
 
   OpenSearchStack:
     Type: "AWS::CloudFormation::Stack"

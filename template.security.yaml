@@ -201,6 +201,7 @@ Resources:
     Type: AWS::KMS::Key
     Properties:
       Description: KMS key for encrypting CloudTrail logs
+      EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
