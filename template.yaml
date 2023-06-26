@@ -133,6 +133,7 @@ Resources:
         replicaRegion: !Ref replicaRegion
         accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName
         enableBackup: !Ref enableBackup
+        emailDistributionSubscription: !Ref emailDistributionSubscription
 
   S3Stack:
     Type: "AWS::CloudFormation::Stack"
@@ -290,3 +291,11 @@ Resources:
         hostedZoneName: !Ref hostedZoneName
         hostedZoneId: !Ref hostedZoneId
         emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  CloudFormationChangesSNSAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "CloudFormation Stack Changes SNS Alerts Topic"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription

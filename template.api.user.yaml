@@ -162,6 +162,14 @@ Resources:
       EndpointConfiguration:
         Type: REGIONAL
       StageName: Prod
+#      TODO: Set this to true to pass CIS Benchmark v1.2.0
+#      TracingEnabled: True
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
       DefinitionBody:
         openapi: 3.0.1
         paths:
