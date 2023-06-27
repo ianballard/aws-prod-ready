@@ -34,7 +34,7 @@ The full list of configurations for this project and their descriptions are as f
 - `enablePersistentStorage`: Enables or disables persistent storage. Set to 'true' for long-lived environments such as dev, release, and prod, and 'false' for ephemeral environments. Defaults to 'true' if not specified.
 - `enableVPC`: Enables or disables the use of a Virtual Private Cloud (VPC). The allowed values are 'true', 'false', and 'null'. Defaults to 'false' if not specified.
 - `enableOpenSearch`: Enables or disables the use of AWS OpenSearch Service. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
-- `enableS3Replication`: Enables or disables Amazon S3 bucket replication. Please note that buckets must exist. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
+- `enableS3Replication`: Enables or disables Amazon S3 bucket replication. Please note that buckets must exist (deploy stacks once with this disabled before enabling). The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
 - `enableAWSAuth`: Enables or disables AWS authentication using Amazon Cognito. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
 - `enableBackup`: Enables or disables AWS Backup for creating and managing backups. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
 - `enableSecurity`: Enables or disables security features such as AWS Security Hub, GuardDuty, and Config. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
@@ -43,6 +43,9 @@ The full list of configurations for this project and their descriptions are as f
 - `enableDNS`: Enables or disables the use of AWS Route53 DNS. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
 - `hostedZoneName`: Specifies the DNS Hosted Zone. Defaults to empty if not specified.
 - `hostedZoneId`: Specifies the DNS Hosted Id. Defaults to empty if not specified.
+
+*NOTE:* Be mindful that some parameters and associated functionality may have dependencies. For example, by setting enableDNS to true, hostedZoneName and hostedZoneId need to be set. 
+Or, in order to take advantage of some of the management event handling like when a new log group is created, enableSecurity must be set to true (CloudTrail emits the event that is then consumed).
 
 ## Features
 
