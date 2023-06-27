@@ -1,0 +1,384 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  API Stack
+
+Globals:
+  Api:
+    Auth:
+      DefaultAuthorizer: "PUBLIC"
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Tracing: Active
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+        "REPLICA_REGION": !Ref replicaRegion
+        "VPC_ENABLED": !Ref enableVPC
+        "CORS_ALLOWED_ORIGINS": !Ref corsAllowedOrigins
+    Layers:
+      - !Ref coreLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  apiLayer:
+    Description: "API Library Layer"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
+  enableOpenSearch:
+    Description: "Enable Open Search (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+    Default: ''
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
+  isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
+
+Resources:
+
+  ApiDefinitionStorage:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'api-definition-access-logs/'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref corsAllowedOrigins
+            AllowedMethods:
+              - 'GET'
+              - 'HEAD'
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
+
+  S3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ApiDefinitionStorage
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${ApiDefinitionStorage}/*'
+
+  CloudFrontOAI:
+    Type: 'AWS::CloudFront::CloudFrontOriginAccessIdentity'
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: 'OAI for S3 bucket access'
+
+  CloudFrontDistribution:
+    Type: 'AWS::CloudFront::Distribution'
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: 'CloudFront Distribution for S3 bucket'
+        DefaultRootObject: 'index.html'
+        Origins:
+          - DomainName: !GetAtt ApiDefinitionStorage.DomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: 'redirect-to-https'
+          AllowedMethods:
+            - 'GET'
+            - 'HEAD'
+            - 'OPTIONS'
+          CachedMethods:
+            - 'GET'
+            - 'HEAD'
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: 'none'
+            Headers:
+              - 'Access-Control-Request-Headers'
+              - 'Access-Control-Request-Method'
+              - 'Origin'
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  ManageApiExportsFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ManageApiExportsFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'apigateway:GET'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cloudfront:CreateInvalidation'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  ManageApiExportsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/api_admin
+      Role: !GetAtt ManageApiExportsFunctionRole.Arn
+      Handler: api_admin_functions.manage_api_exports
+
+  WebACLWithAMR:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      Description: Web ACL with AWS Managed Rules
+      DefaultAction:
+        Allow: { }
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "MetricForWebACLWithAMR-${stage}"
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 0
+          OverrideAction:
+            None: { }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "MetricForAMRCRS-${stage}"
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+        - Name: APIRateLimit
+          Priority: 1
+          Action:
+            Block: { }
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: APIRateLimitMetric
+            SampledRequestsEnabled: true
+
+  AuthApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref coreLayer
+        apiLayer: !Ref apiLayer
+        securityGroup: !Ref securityGroup
+        vpcSubnetIds: !Join [',', !Ref vpcSubnetIds]
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  AuthWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${AuthApiStack.Outputs.ApiId}/stages/Prod
+
+  ExecuteManageAuthApiExportsFunction:
+    Type: Custom::ExecuteManageAuthApiExportsFunction
+    Properties:
+      ServiceToken: !GetAtt ManageApiExportsFunction.Arn
+      ApiId: !GetAtt AuthApiStack.Outputs.ApiId
+      BucketName: !Ref ApiDefinitionStorage
+      CloudFrontDistribution: !Ref CloudFrontDistribution
+      ApiUrl: !If [ isDNSEnabled, !Sub "https://api-auth-${stage}.${hostedZoneName}",  !GetAtt AuthApiStack.Outputs.ApiGatewayUrl ]
+
+  UserApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.user.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref coreLayer
+        apiLayer: !Ref apiLayer
+        securityGroup: !Ref securityGroup
+        vpcSubnetIds: !Join [',', !Ref vpcSubnetIds]
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  UserWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${UserApiStack.Outputs.ApiId}/stages/Prod
+
+  ExecuteManageUserApiExportsFunction:
+    Type: Custom::ExecuteManageUserApiExportsFunction
+    Properties:
+      ServiceToken: !GetAtt ManageApiExportsFunction.Arn
+      ApiId: !GetAtt UserApiStack.Outputs.ApiId
+      BucketName: !Ref ApiDefinitionStorage
+      CloudFrontDistribution: !Ref CloudFrontDistribution
+      ApiUrl: !If [ isDNSEnabled, !Sub "https://api-user-${stage}.${hostedZoneName}",  !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
+
+  SearchApiStack:
+    Condition: isOpenSearchEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.search.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref coreLayer
+        apiLayer: !Ref apiLayer
+        securityGroup: !Ref securityGroup
+        vpcSubnetIds: !Join [',', !Ref vpcSubnetIds]
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  SearchWebACLAssociation:
+    Condition: isOpenSearchEnabled
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt WebACLWithAMR.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${SearchApiStack.Outputs.ApiId}/stages/Prod
+
+  ExecuteManageSearchApiExportsFunction:
+    Condition: isOpenSearchEnabled
+    Type: Custom::ExecuteManageSearchApiExportsFunction
+    Properties:
+      ServiceToken: !GetAtt ManageApiExportsFunction.Arn
+      ApiId: !GetAtt SearchApiStack.Outputs.ApiId
+      BucketName: !Ref ApiDefinitionStorage
+      CloudFrontDistribution: !Ref CloudFrontDistribution
+      ApiUrl: !If [ isDNSEnabled, !Sub "https://api-search-${stage}.${hostedZoneName}",  !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
+
+Outputs:
+  AuthApiUrl:
+    Description: "Auth API"
+    Value: !If [ isDNSEnabled, !Sub "https://api-auth-${stage}.${hostedZoneName}",  !GetAtt AuthApiStack.Outputs.ApiGatewayUrl ]
+  UserApiUrl:
+    Description: "User API"
+    Value: !If [ isDNSEnabled, !Sub "https://api-user-${stage}.${hostedZoneName}",  !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
+  SearchApiUrl:
+    Condition: isOpenSearchEnabled
+    Description: "Search API"
+    Value: !If [ isDNSEnabled, !Sub "https://api-search-${stage}.${hostedZoneName}",  !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
+  ApiDefinitionStorageCDN:
+    Description: "CDN Domain Name for hosted API definitions"
+    Value: !GetAtt CloudFrontDistribution.DomainName

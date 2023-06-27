@@ -1,0 +1,792 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Security Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  accessLogBucket:
+    Description: "Access Log Bucket Name"
+    Type: String
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
+
+Resources:
+
+  EnableSecurityHub:
+    Type: 'AWS::SecurityHub::Hub'
+
+  EnableGuardDuty:
+    Type: 'AWS::GuardDuty::Detector'
+    Properties:
+      Enable: true
+
+  ConfigSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      TopicName: !Sub "awsconfig-topic-${stage}-${AWS::Region}"
+
+  EnableConfig:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      Name: "default"
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+      RoleARN: !GetAtt ConfigServiceRole.Arn
+
+  ConfigServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "awsconfig-service-role-${stage}-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "AWSConfigServicePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "config:Put*"
+                  - "config:Get*"
+                  - "config:List*"
+                  - "config:Describe*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:Describe*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetBucketAcl"
+                  - "s3:HeadBucket"
+                Resource:
+                  - !Sub "arn:aws:s3:::${ConfigBucket}"
+                  - !Sub "arn:aws:s3:::${ConfigBucket}/*"
+              - Effect: "Allow"
+                Action:
+                  - "sns:Publish"
+                Resource: !Ref ConfigSNSTopic
+              - Effect: "Allow"
+                Action:
+                  - "iam:Get*"
+                  - "iam:GenerateCredentialReport"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "apigateway:GET"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "elasticmapreduce:List*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "kms:List*"
+                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+
+  ConfigDeliveryChannel:
+    Type: "AWS::Config::DeliveryChannel"
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: "TwentyFour_Hours"
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref ConfigSNSTopic
+
+  ConfigBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLogBucket
+        LogFilePrefix: 'config-access-logs/'
+
+  ConfigBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AWSConfigBucketPermissions"
+            Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}"
+          - Sid: "AWSConfigBucketDelivery"
+            Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+  CloudTrailBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref accessLogBucket
+        LogFilePrefix: 'cloud-trail-access-logs/'
+
+  CloudTrailBucketPolicy:
+    Condition: isPrimary
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:Delete*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}'
+          - Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  TrailKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting CloudTrail logs
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow CloudTrail to use KMS key
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:DescribeKey
+            Resource: '*'
+
+  CloudTrailLogsGroup:
+    Type: AWS::Logs::LogGroup
+
+  CloudTrailLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CloudTrailLogsGroup.Arn
+
+  CloudTrail:
+    Condition: isPrimary
+    Type: 'AWS::CloudTrail::Trail'
+    Properties:
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      TrailName: 'GlobalCloudTrail'
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      KMSKeyId: !Ref TrailKmsKey
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogsGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLoggingRole.Arn
+      EventSelectors:
+        - DataResources:
+            - Type: "AWS::DynamoDB::Table"
+              Values: [ "arn:aws:dynamodb" ]
+            - Type: "AWS::S3::Object"
+              Values: [ "arn:aws:s3" ]
+          IncludeManagementEvents: true
+          ReadWriteType: All
+
+  CloudTrailBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "CloudTrailBackupVault-${stage}-${AWS::Region}"
+
+  CloudTrailBackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  CloudTrailBackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: CloudTrailBackupPlan
+        BackupPlanRule:
+          - RuleName: CloudTrailDailyBackupAndCopy
+            TargetBackupVault: !Ref CloudTrailBackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${replicaRegion}:${AWS::AccountId}:backup-vault:CloudTrailBackupVault-${stage}-${replicaRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref CloudTrailBackupPlan
+      BackupSelection:
+        SelectionName: CloudTrailBucketBackupSelection
+        IamRoleArn: !GetAtt CloudTrailBackupRole.Arn
+        Resources:
+          - !GetAtt CloudTrailBucket.Arn
+
+  SecurityAlarmSNSAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Security Alarm SNS Alerts Topic"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription
+
+  RootActivityMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: RootActivityMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.userIdentity.type = "Root") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != "AwsServiceEvent") }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: RootActivityMetric
+          DefaultValue: 0
+
+  RootActivityAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if root activity detected
+      Namespace: "CISBenchmark"
+      MetricName: "RootActivityMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  UnauthorizedAccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: UnauthorizedAccessMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: UnauthorizedAccessMetric
+          DefaultValue: 0
+
+  UnauthorizedAccessAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if unauthorized access detected
+      Namespace: "CISBenchmark"
+      MetricName: "UnauthorizedAccessMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  UnprotectedConsoleLoginMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: UnprotectedConsoleLoginMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = "ConsoleLogin") && ($.additionalEventData.MFAUsed != "Yes") && ($.userIdentity.type = "IAMUser") && ($.responseElements.ConsoleLogin = "Success") }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: UnprotectedConsoleLoginMetric
+          DefaultValue: 0
+
+  UnprotectedConsoleLoginAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if unprotected console login detected
+      Namespace: "CISBenchmark"
+      MetricName: "UnprotectedConsoleLoginMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  IAMPolicyChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: IAMPolicyChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventSource = iam.amazonaws.com) && (($.eventName = DeleteGroupPolicy) || ($.eventName = DeleteRolePolicy) || ($.eventName = DeleteUserPolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutUserPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = CreatePolicyVersion) || ($.eventName = DeletePolicyVersion) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy) || ($.eventName = AttachUserPolicy) || ($.eventName = DetachUserPolicy) || ($.eventName = AttachGroupPolicy) || ($.eventName = DetachGroupPolicy)) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: IAMPolicyChangesMetric
+          DefaultValue: 0
+
+  IAMPolicyChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if IAM policy changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "IAMPolicyChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  CloudTrailChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: CloudTrailChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = CreateTrail) || ($.eventName = UpdateTrail) || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName = StopLogging) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: CloudTrailChangesMetric
+          DefaultValue: 0
+
+  CloudTrailChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if CloudTrail configuration changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "CloudTrailChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  FailedConsoleLoginMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: FailedConsoleLoginMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = "ConsoleLogin") && ($.errorMessage = "Failed authentication") }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: FailedConsoleLoginMetric
+          DefaultValue: 0
+
+  FailedConsoleLoginAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if failed console login detected
+      Namespace: "CISBenchmark"
+      MetricName: "FailedConsoleLoginMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  KMSKeyChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: KMSKeyChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventSource = kms.amazonaws.com) && (($.eventName = DisableKey) || ($.eventName = ScheduleKeyDeletion)) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: KMSKeyChangesMetric
+          DefaultValue: 0
+
+  KMSKeyChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if KMS key changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "KMSKeyChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  S3BucketChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: S3BucketChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventSource = s3.amazonaws.com) && (($.eventName = PutBucketAcl) || ($.eventName = PutBucketPolicy) || ($.eventName = PutBucketCors) || ($.eventName = PutBucketLifecycle) || ($.eventName = PutBucketReplication) || ($.eventName = DeleteBucketPolicy) || ($.eventName = DeleteBucketCors) || ($.eventName = DeleteBucketLifecycle) || ($.eventName = DeleteBucketReplication)) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: S3BucketChangesMetric
+          DefaultValue: 0
+
+  S3BucketChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if S3 bucket changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "S3BucketChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  ConfigServiceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: ConfigServiceChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventSource = config.amazonaws.com) && (($.eventName = StopConfigurationRecorder) || ($.eventName = DeleteDeliveryChannel) || ($.eventName = PutDeliveryChannel) || ($.eventName = PutConfigurationRecorder)) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: ConfigServiceChangesMetric
+          DefaultValue: 0
+
+  ConfigServiceChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if AWS Config service changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "ConfigServiceChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  SecurityGroupChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: SecurityGroupChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = AuthorizeSecurityGroupIngress) ||
+        ($.eventName = AuthorizeSecurityGroupEgress) ||
+        ($.eventName = RevokeSecurityGroupIngress) ||
+        ($.eventName = RevokeSecurityGroupEgress) ||
+        ($.eventName = CreateSecurityGroup) ||
+        ($.eventName = DeleteSecurityGroup) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: SecurityGroupChangesMetric
+          DefaultValue: 0
+
+  SecurityGroupChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if security group changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "SecurityGroupChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  NetworkAclChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: NetworkAclChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry) || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry) || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: NetworkAclChangesMetric
+          DefaultValue: 0
+
+  NetworkAclChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if network ACL changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "NetworkAclChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  GatewayChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: GatewayChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway) || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway) || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: GatewayChangesMetric
+          DefaultValue: 0
+
+  GatewayChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if gateway changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "GatewayChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  RouteTableChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: RouteTableChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventSource = ec2.amazonaws.com) && (($.eventName = CreateRoute) || ($.eventName = CreateRouteTable) || ($.eventName = ReplaceRoute) || ($.eventName = ReplaceRouteTableAssociation) || ($.eventName = DeleteRouteTable) || ($.eventName = DeleteRoute) || ($.eventName = DisassociateRouteTable)) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: RouteTableChangesMetric
+          DefaultValue: 0
+
+  RouteTableChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if route table changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "RouteTableChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+  VPCChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: VPCChangesMetricFilter
+      LogGroupName: !Ref CloudTrailLogsGroup
+      FilterPattern: >-
+        { ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) || ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection) || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection) || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc) || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink) || ($.eventName = EnableVpcClassicLink) }
+      MetricTransformations:
+        - MetricValue: 1
+          MetricNamespace: CISBenchmark
+          MetricName: VPCChangesMetric
+          DefaultValue: 0
+
+  VPCChangesAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmDescription: Alarm if VPC changes detected
+      Namespace: "CISBenchmark"
+      MetricName: "VPCChangesMetric"
+      Statistic: "Sum"
+      Period: "300"
+      EvaluationPeriods: "1"
+      DatapointsToAlarm: "1"
+      Threshold: "1"
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+      OKActions:
+        - Ref: SecurityAlarmSNSAlertsTopic
+
+
+Outputs:
+  SecurityHubArn:
+    Description: "Security Hub ARN"
+    Value: !Ref EnableSecurityHub
+  GuardDutyDetectorId:
+    Description: "GuardDuty Detector ID"
+    Value: !Ref EnableGuardDuty

@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Auth Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+
+Resources:
+
+  AppUserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      UserPoolName: !Sub "AppUserPool-${stage}-${AWS::Region}"
+      DeletionProtection: ACTIVE
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      Schema:
+        - Name: "email"
+          AttributeDataType: "String"
+          Mutable: true
+          Required: true
+        - Name: "given_name"
+          AttributeDataType: "String"
+          Mutable: true
+          Required: true
+        - Name: "family_name"
+          AttributeDataType: "String"
+          Mutable: true
+          Required: true
+        - Name: "profile"
+          AttributeDataType: "String"
+          Mutable: false
+          Required: true
+      AliasAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      VerificationMessageTemplate:
+        EmailSubject: "Verification Code"
+        EmailMessage: "Your verification code is {####}."
+
+  UserPoolIdParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "USER_POOL_ID"
+      Type: "String"
+      Value: !Ref AppUserPool
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref AppUserPool
+      ClientName: !Sub "UserPoolClient-${stage}-${AWS::Region}"
+      GenerateSecret: true
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+
+  UserPoolClientParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "USER_POOL_CLIENT"
+      Type: "String"
+      Value: !Ref UserPoolClient
+
+  UserGroupUser:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: User
+      UserPoolId: !Ref AppUserPool
+
+  UserGroupAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admin
+      UserPoolId: !Ref AppUserPool
+
+  UserGroupSuperAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: SuperAdmin
+      UserPoolId: !Ref AppUserPool
+
+Outputs:
+  AppUserPoolId:
+    Value: !Ref AppUserPool
+  AppUserPoolArn:
+    Value: !GetAtt AppUserPool.Arn
+  UserPoolClient:
+    Value: !Ref UserPoolClient

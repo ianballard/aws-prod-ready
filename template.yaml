@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Main Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  enablePersistentStorage:
+    Description: "Enable Persistent Storage (true|false) true for long lived environments (dev, release, prod) and false for ephemeral environments"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  enableVPC:
+    Description: "Enable VPC (true|false|null)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+      - 'null'
+    Default: 'false'
+  enableOpenSearch:
+    Description: "Enable Open Search (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  enableS3Replication:
+    Description: "Is s3 replication enabled (true|false) NOTE: buckets must exist"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  enableAWSAuth:
+    Description: "Is aws auth (cognito) enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  enableSecurity:
+    Description: "Is security enabled (true|false) - Security Hub, GuardDuty, Config"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+    Default: ''
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
+
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isSecondary: !Equals [ !Ref stackType, 'secondary' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isAWSAuthEnabled: !Equals [ !Ref enableAWSAuth, 'true' ]
+  isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isPersistentStorageEnabled: !Equals [ !Ref enablePersistentStorage, 'true' ]
+  isSecurityEnabled: !Equals [ !Ref enableSecurity, 'true' ]
+  isPrimaryAndStorageEnabled: !And
+    - !Condition isPrimary
+    - !Condition isPersistentStorageEnabled
+  isAWSAuthAndStorageEnabled: !And
+    - !Condition isAWSAuthEnabled
+    - !Condition isPersistentStorageEnabled
+  isOpenSearchAndStorageEnabled: !And
+    - !Condition isOpenSearchEnabled
+    - !Condition isPersistentStorageEnabled
+  isSecondaryAndBackupEnabled: !And
+    - !Condition isSecondary
+    - !Condition isBackupEnabled
+
+Resources:
+
+  SecurityStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isSecurityEnabled
+    Properties:
+      TemplateURL: template.security.yaml
+      Parameters:
+        stage: !Ref stage
+        stackType: !Ref stackType
+        replicaRegion: !Ref replicaRegion
+        accessLogBucket: !GetAtt S3Stack.Outputs.AccessLogBucketName
+        enableBackup: !Ref enableBackup
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  S3Stack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isPersistentStorageEnabled
+    Properties:
+      TemplateURL: template.s3.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        stackType: !Ref stackType
+        appId: !Ref appId
+        enableS3Replication: !Ref enableS3Replication
+        enableBackup: !Ref enableBackup
+
+  DynamoDBStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isPersistentStorageEnabled
+    Properties:
+      TemplateURL: template.db.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        dbTableName: !Ref dbTableName
+        enableBackup: !Ref enableBackup
+        stackType: !Ref stackType
+
+  DataPipelineStack:
+    Condition: isPersistentStorageEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.data-pipeline.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        appId: !Ref appId
+        enableBackup: !Ref enableBackup
+        stackType: !Ref stackType
+
+  BackupDestinationVaultStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isSecondaryAndBackupEnabled
+    Properties:
+      TemplateURL: template.backup.yaml
+      Parameters:
+        stage: !Ref stage
+
+  VPCStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isVPCEnabled
+    Properties:
+      TemplateURL: template.vpc.yaml
+
+  AuthStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isAWSAuthAndStorageEnabled
+    Properties:
+      TemplateURL: template.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+
+  CoreLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: core-library-layer
+      Description: Core library for project.
+      ContentUri: shared_layers/core_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  ApiLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: api-library-layer
+      Description: Api library for project.
+      ContentUri: api/layers/api_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  LoggingAndMetricsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isPersistentStorageEnabled
+    Properties:
+      TemplateURL: template.logging-metrics.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+        stackType: !Ref stackType
+        appId: !Ref appId
+
+  OpenSearchStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: isOpenSearchAndStorageEnabled
+    Properties:
+      TemplateURL: template.opensearch.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+        coreLayer: !Ref CoreLibraryLayer
+
+  DBEventStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.event.db.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+        enableOpenSearch: !Ref enableOpenSearch
+        dbTableName: !If [ isPrimaryAndStorageEnabled, !GetAtt DynamoDBStack.Outputs.TableName, "" ]
+
+  AuthEventStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.event.auth.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref CoreLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+
+  ApiStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.api.yaml
+      Parameters:
+        stage: !Ref stage
+        replicaRegion: !Ref replicaRegion
+        coreLayer: !Ref CoreLibraryLayer
+        apiLayer: !Ref ApiLibraryLayer
+        securityGroup: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.SecurityGroup, "" ]
+        vpcSubnetIds: !If [ isVPCEnabled, !GetAtt VPCStack.Outputs.VpcSubnetIds, "" ]
+        enableVPC: !Ref enableVPC
+        dbTableName: !Ref dbTableName
+        corsAllowedOrigins: !Ref corsAllowedOrigins
+        enableOpenSearch: !Ref enableOpenSearch
+        stackType: !Ref stackType
+        appId: !Ref appId
+        enableDNS: !Ref enableDNS
+        hostedZoneName: !Ref hostedZoneName
+        hostedZoneId: !Ref hostedZoneId
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  CloudFormationChangesSNSAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "CloudFormation Stack Changes SNS Alerts Topic"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription

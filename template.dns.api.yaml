@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  DNS Stack for API Gateway
+
+Parameters:
+  hostedZoneId:
+    Description: "Id of the hosted zone"
+    Type: String
+  hostedZoneName:
+    Description: "Name of the hosted zone"
+    Type: String
+  apiGatewayId:
+    Description: "Api Gateway Id"
+    Type: String
+  apiName:
+    Description: "Name of the API"
+    Type: String
+  stage:
+    Description: "Stage"
+    Type: String
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+
+Resources:
+
+  AcmCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub '*.${hostedZoneName}'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref hostedZoneName
+          HostedZoneId: !Ref hostedZoneId
+
+  CustomDomain:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Sub "api-${apiName}-${stage}.${hostedZoneName}"
+      RegionalCertificateArn: !Ref AcmCertificate
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  BasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref CustomDomain
+      RestApiId: !Ref apiGatewayId
+      Stage: 'Prod'
+
+  HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTPS
+        ResourcePath: /Prod/v1.0/health
+        FullyQualifiedDomainName: !Sub "${apiGatewayId}.execute-api.${AWS::Region}.amazonaws.com"
+        Port: 443
+        RequestInterval: 30
+        FailureThreshold: 3
+        EnableSNI: true
+        Regions:
+          - us-east-1
+          - us-west-1
+          - us-west-2
+      HealthCheckTags:
+        - Key: 'Name'
+          Value: !Sub '${apiName}-${stage}-ApiHealthCheck-${AWS::Region}'
+
+  HealthCheckStatusAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Health check failed
+      Namespace: AWS/Route53
+      MetricName: HealthCheckStatus
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !Ref HealthCheck
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref HealthCheckSNSAlertTopic
+
+  HealthCheckSNSAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Route53HealthCheckAlert
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription
+
+  ARecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref hostedZoneId
+      Name: !Sub "api-${apiName}-${stage}.${hostedZoneName}"
+      Type: A
+      SetIdentifier: !Sub "${apiName}-${stage}-${AWS::Region}"
+      Region: !Ref AWS::Region
+      AliasTarget:
+        DNSName: !GetAtt CustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
+        EvaluateTargetHealth: true
+      HealthCheckId: !Ref HealthCheck

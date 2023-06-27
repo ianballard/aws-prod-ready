@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Data Pipeline Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
+
+Resources:
+
+  DataPipelineDestinationS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${appId}-${stage}-${stackType}-data-pipeline-destination"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'data-pipeline-access-logs/'
+
+  FirehoseDeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: MyFirehoseDeliveryPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListMultipartUploadParts
+                Resource:
+                  - !Sub "arn:aws:s3:::${DataPipelineDestinationS3Bucket}"
+                  - !Sub "arn:aws:s3:::${DataPipelineDestinationS3Bucket}/*"
+
+  FirehoseDeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !GetAtt DataPipelineDestinationS3Bucket.Arn
+        RoleARN: !GetAtt FirehoseDeliveryRole.Arn
+        Prefix: "db/"
+        ErrorOutputPrefix: "error/"
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 1
+        CompressionFormat: "UNCOMPRESSED"
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref FirehoseDeliveryStreamS3LogGroup
+          LogStreamName: 'FirehoseDeliveryStreamS3LogStream'
+        EncryptionConfiguration:
+          KMSEncryptionConfig:
+            AWSKMSKeyARN: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/s3"
+
+  FirehoseDeliveryStreamS3LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+
+  FirehoseDeliveryStreamS3LogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref FirehoseDeliveryStreamS3LogGroup
+      LogStreamName: 'FirehoseDeliveryStreamS3LogStream'
+
+  FirehoseDeliveryStreamParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "FIREHOSE_DELIVERY_STREAM"
+      Type: "String"
+      Value: !Ref FirehoseDeliveryStream
+
+  DataPipelineBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "DataPipelineBackupVault-${AWS::Region}"
+
+  S3BackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  DataPipelineBackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: DataPipelineBackupPlan
+        BackupPlanRule:
+          - RuleName: S3DailyBackupAndCopy
+            TargetBackupVault: !Ref DataPipelineBackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${replicaRegion}:${AWS::AccountId}:backup-vault:DataPipelineBackupVault-${stage}-${replicaRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref DataPipelineBackupPlan
+      BackupSelection:
+        SelectionName: S3TableBackupSelection
+        IamRoleArn: !GetAtt S3BackupRole.Arn
+        Resources:
+          - !GetAtt DataPipelineDestinationS3Bucket.Arn
+
+Outputs:
+  DataPipelineDestinationS3BucketName:
+    Value: !Ref DataPipelineDestinationS3Bucket
+    Description: "The name of the Amazon S3 bucket."

@@ -1,0 +1,689 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  User API Stack
+
+Globals:
+  Api:
+    Auth:
+      DefaultAuthorizer: "PUBLIC"
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Tracing: Active
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+        "REPLICA_REGION": !Ref replicaRegion
+        "VPC_ENABLED": !Ref enableVPC
+        "CORS_ALLOWED_ORIGINS": !Sub "${corsAllowedOrigins}"
+    Layers:
+      - !Ref coreLayer
+      - !Ref apiLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  apiLayer:
+    Description: "API Library Layer"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  dbTableName:
+    Description: "Table Name"
+    Type: String
+    Default: "DBTable"
+  corsAllowedOrigins:
+    Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
+    Type: String
+    Default: ''
+  enableDNS:
+    Description: "Is Route53 DNS enabled"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  hostedZoneName:
+    Description: "DNS Hosted Zone"
+    Type: String
+    Default: ''
+  hostedZoneId:
+    Description: "DNS Hosted Id"
+    Type: String
+    Default: ''
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+    Default: ''
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+  isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
+
+Resources:
+
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Action: 'sts:AssumeRole'
+          Effect: Allow
+          Principal:
+            Service: apigateway.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaRole'
+
+  ApiCWLRoleArn:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
+
+  ApiGatewayApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+
+  UserApiDnsStack:
+    Condition: isDNSEnabled
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: template.dns.api.yaml
+      Parameters:
+        apiGatewayId: !Ref ApiGatewayApi
+        apiName: 'user'
+        stage: !Ref stage
+        hostedZoneId: !Ref hostedZoneId
+        hostedZoneName: !Ref hostedZoneName
+        emailDistributionSubscription: !Ref emailDistributionSubscription
+
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Description: "User API"
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayApiAccessLogGroup.Arn
+        Format: '{
+          "accountId": "$context.accountId",
+          "apiId": "$context.apiId",
+          "awsEndpointRequestId": "$context.awsEndpointRequestId",
+          "domainName": "$context.domainName",
+          "domainPrefix": "$context.domainPrefix",
+          "errorMessage": "$context.error.message",
+          "errorMessageString": "$context.error.messageString",
+          "errorResponseType": "$context.error.responseType",
+          "errorValidationErrorString": "$context.error.validationErrorString",
+          "extendedRequestId": "$context.extendedRequestId",
+          "httpMethod": "$context.httpMethod",
+          "identitySourceIp": "$context.identity.sourceIp",
+          "identityUserAgent": "$context.identity.userAgent",
+          "path": "$context.path",
+          "protocol": "$context.protocol",
+          "requestId": "$context.requestId",
+          "requestTime": "$context.requestTime",
+          "resourceId": "$context.resourceId",
+          "resourcePath": "$context.resourcePath",
+          "stage": "$context.stage",
+          "wafResponseCode": "$context.wafResponseCode",
+          "webaclArn": "$context.webaclArn"
+        }'
+      EndpointConfiguration:
+        Type: REGIONAL
+      StageName: Prod
+#      TODO: Set this to true to pass CIS Benchmark v1.2.0
+#      TracingEnabled: True
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+      DefinitionBody:
+        openapi: 3.0.1
+        paths:
+          /v1.0/health:
+            options:
+              responses:
+                "200":
+                  description: "CORS"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Methods:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'${corsAllowedOrigins}'"
+            get:
+              responses:
+                '200':
+                  description: Successful health check
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HealthCheckFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+          /v1.0/user:
+            get:
+              responses:
+                '200':
+                  description: Successful query for associated users
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          last_evaluated_key:
+                            type: string
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                profile:
+                                  type: string
+                                username:
+                                  type: string
+                                first_name:
+                                  type: string
+                                last_name:
+                                  type: string
+                                email:
+                                  type: string
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QueryUserFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+            options:
+              responses:
+                "200":
+                  description: "CORS"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Methods:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'${corsAllowedOrigins}'"
+          /v1.0/user/{id}:
+            options:
+              responses:
+                "200":
+                  description: "CORS"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Methods:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'${corsAllowedOrigins}'"
+            get:
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                    maxLength: 36
+                    minLength: 36
+              responses:
+                '200':
+                  description: Successful get user
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          profile:
+                            type: string
+                          username:
+                            type: string
+                          first_name:
+                            type: string
+                          last_name:
+                            type: string
+                          email:
+                            type: string
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+            patch:
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                    maxLength: 36
+                    minLength: 36
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        entity_status:
+                          type: string
+              responses:
+                '200':
+                  description: Successful update user
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          profile:
+                            type: string
+                          username:
+                            type: string
+                          first_name:
+                            type: string
+                          last_name:
+                            type: string
+                          email:
+                            type: string
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateUserFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+            delete:
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                    maxLength: 36
+                    minLength: 36
+              responses:
+                '204':
+                  description: Successful delete user
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+          /v1.0/user/{id}/associate:
+            options:
+              responses:
+                "200":
+                  description: "CORS"
+                  headers:
+                    Access-Control-Allow-Headers:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Methods:
+                      schema:
+                        type: string
+                    Access-Control-Allow-Origin:
+                      schema:
+                        type: string
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,PATCH,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'${corsAllowedOrigins}'"
+            put:
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                    maxLength: 36
+                    minLength: 36
+              responses:
+                "201":
+                  description: "Successful association"
+              x-amazon-apigateway-integration:
+                httpMethod: post
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AssociateUserFunction.Arn}/invocations
+              x-amazon-apigateway-request-validator: ValidateBodyAndParams
+          components:
+            requestValidators:
+              ValidateBodyAndParams:
+                validateRequestBody: true
+                validateRequestParameters: true
+
+  HealthCheckFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: UserHealthCheckFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cognito-idp:DescribeUserPoolClient'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.health
+      Tracing: !Ref AWS::NoValue
+      Role: !GetAtt HealthCheckFunctionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/health
+            Method: get
+
+  QueryUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: QueryUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchGetItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  QueryUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.query
+      Role: !GetAtt QueryUserFunctionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user
+            Method: get
+
+  GetUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GetUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchGetItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  GetUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.get
+      Role: !GetAtt GetUserFunctionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user/{id}
+            Method: get
+
+  UpdateUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: UpdateUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:UpdateItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.update
+      Role: !GetAtt UpdateUserFunctionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user/{id}
+            Method: patch
+
+  DeleteUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DeleteUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:UpdateItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.delete
+      Role: !GetAtt DeleteUserFunctionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user/{id}
+            Method: delete
+
+  AssociateUserFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AssociateUserFunctionRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+
+  AssociateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.associate
+      Role: !GetAtt AssociateUserFunctionRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /v1.0/user/{id}/associate
+            Method: put
+
+Outputs:
+  ApiId:
+    Description: "API Gateway Id"
+    Value: !Ref ApiGatewayApi
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  GetUserFunctionArn:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt GetUserFunction.Arn
+  GetUserFunctionIamRole:
+    Description: "Implicit IAM Role created for the function"
+    Value: !GetAtt GetUserFunctionRole.Arn

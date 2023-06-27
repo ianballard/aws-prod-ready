@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Backup Vault Destinations Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+
+Resources:
+
+  DynamoDBBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "DynamoDBBackupVault-${stage}-${AWS::Region}"
+
+  S3BackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "S3BackupVault-${stage}-${AWS::Region}"
+
+  DataPipelineBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "DataPipelineBackupVault-${stage}-${AWS::Region}"
+
+  CloudTrailBackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Properties:
+      BackupVaultName: !Sub "CloudTrailBackupVault-${stage}-${AWS::Region}"

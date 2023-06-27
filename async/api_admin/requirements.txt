@@ -1,0 +1,4 @@
+requests==2.31.0
+aws-xray-sdk==0.96
+jsonschema==4.17.3
+urllib3<2
