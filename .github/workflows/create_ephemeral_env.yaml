@@ -43,7 +43,7 @@ jobs:
             --s3-bucket "$PRIMARY_SAM_BUCKET" \
             --s3-prefix "${STAGE#*/}" \
             --no-fail-on-empty-changeset \
-            --parameter-overrides stage="${STAGE#*/}" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableApiCDN="false"
+            --parameter-overrides stage="${STAGE#*/}" appId="t52x7zk6ls6p" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableDNS="false"
 
       - name: Build secondary
         run: |
@@ -56,6 +56,6 @@ jobs:
             --s3-bucket "$SECONDARY_SAM_BUCKET" \
             --s3-prefix "${STAGE#*/}" \
             --no-fail-on-empty-changeset \
-            --parameter-overrides stage="${STAGE#*/}" replicaRegion="us-east-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableApiCDN="false"
+            --parameter-overrides stage="${STAGE#*/}" appId="t52x7zk6ls6p" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableDNS="false"
       
       
