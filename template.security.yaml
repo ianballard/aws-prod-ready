@@ -87,8 +87,13 @@ Resources:
                 Resource: "*"
               - Effect: "Allow"
                 Action:
+                  - "ec2:Describe*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
                   - "s3:PutObject"
                   - "s3:GetBucketAcl"
+                  - "s3:HeadBucket"
                 Resource:
                   - !Sub "arn:aws:s3:::${ConfigBucket}"
                   - !Sub "arn:aws:s3:::${ConfigBucket}/*"
@@ -96,6 +101,25 @@ Resources:
                 Action:
                   - "sns:Publish"
                 Resource: !Ref ConfigSNSTopic
+              - Effect: "Allow"
+                Action:
+                  - "iam:Get*"
+                  - "iam:GenerateCredentialReport"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "apigateway:GET"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "elasticmapreduce:List*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "kms:List*"
+                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 
   ConfigDeliveryChannel:
     Type: "AWS::Config::DeliveryChannel"

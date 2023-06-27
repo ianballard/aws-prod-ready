@@ -81,6 +81,7 @@ Parameters:
   emailDistributionSubscription:
     Description: "Email distribution of who gets notified of alerts"
     Type: String
+    Default: ''
   enableDNS:
     Description: "Is Route53 DNS enabled"
     Type: String
