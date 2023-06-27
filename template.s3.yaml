@@ -1,0 +1,241 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Primary S3 Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+  enableS3Replication:
+    Description: "Is s3 replication enabled (true|false) NOTE: buckets must exist"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  enableBackup:
+    Description: "Is aws backup enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+
+Conditions:
+  isPrimary: !Equals [ !Ref stackType, 'primary' ]
+  isS3ReplicationEnabled: !Equals [ !Ref enableS3Replication, 'true' ]
+  isBackupEnabled: !Equals [ !Ref enableBackup, 'true' ]
+  isPrimaryAndBackupEnabled: !And
+    - !Condition isPrimary
+    - !Condition isBackupEnabled
+
+Resources:
+
+  S3ReplicationRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 's3.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'AccessLogS3ReplicationPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetReplicationConfiguration
+                  - s3:ListBucket
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                  - s3:GetObjectVersionForReplication
+                  - s3:GetObjectVersionTorrent
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketLocation
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                  - s3:ReplicateTags
+                  - s3:ObjectOwnerOverrideToBucketOwner
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: '*'
+
+
+  AccessLogBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+
+  LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowS3ServerAccessLogging'
+            Effect: 'Allow'
+            Principal:
+              Service: 'logging.s3.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${AccessLogBucket}/*'
+
+  AppStorage:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${appId}-${stage}-${stackType}-app-storage"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: 'alias/aws/s3'
+              SSEAlgorithm: 'aws:kms'
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'app-bucket-access-logs/'
+      ReplicationConfiguration: !If
+        - isS3ReplicationEnabled
+        - Role: !GetAtt S3ReplicationRole.Arn
+          Rules:
+            - Id: 'AppStorageReplication'
+              Status: Enabled
+              Destination:
+                Bucket: !If [ isPrimary, !Sub "arn:aws:s3:::${appId}-${stage}-secondary-app-storage", !Sub "arn:aws:s3:::${appId}-${stage}-primary-app-storage" ]
+                StorageClass: STANDARD
+                EncryptionConfiguration:
+                  ReplicaKmsKeyID: !Sub "arn:aws:kms:${replicaRegion}:${AWS::AccountId}:alias/aws/s3"
+              Prefix: ''
+              SourceSelectionCriteria:
+                SseKmsEncryptedObjects:
+                  Status: Enabled
+        - !Ref AWS::NoValue
+
+  AppStorageBucketParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "S3_APP_STORAGE_BUCKET"
+      Type: "String"
+      Value: !Sub "${appId}-${stage}-${stackType}-app-storage"
+      
+  S3BackupVault:
+    Type: 'AWS::Backup::BackupVault'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupVaultName: !Sub "S3BackupVault-${stage}-${AWS::Region}"
+
+  S3BackupRole:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup
+
+  S3BackupPlan:
+    Type: 'AWS::Backup::BackupPlan'
+    Condition: isPrimaryAndBackupEnabled
+    Properties:
+      BackupPlan:
+        BackupPlanName: S3BackupPlan
+        BackupPlanRule:
+          - RuleName: S3DailyBackupAndCopy
+            TargetBackupVault: !Ref S3BackupVault
+            ScheduleExpression: 'cron(0 0 * * ? *)'  # Daily at 12:00am UTC
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 60
+            CopyActions:
+              - DestinationBackupVaultArn: !Sub "arn:aws:backup:${replicaRegion}:${AWS::AccountId}:backup-vault:S3BackupVault-${stage}-${replicaRegion}"
+                Lifecycle:
+                  DeleteAfterDays: 60
+
+  BackupSelection:
+    Condition: isPrimaryAndBackupEnabled
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref S3BackupPlan
+      BackupSelection:
+        SelectionName: S3BackupSelection
+        IamRoleArn: !GetAtt S3BackupRole.Arn
+        Resources:
+          - !GetAtt AccessLogBucket.Arn
+          - !GetAtt AppStorage.Arn
+
+Outputs:
+  S3ReplicationRoleArn:
+    Value: !GetAtt S3ReplicationRole.Arn
+  AccessLogBucketName:
+    Value: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+  AppStorageBucketName:
+    Value: !Sub "${appId}-${stage}-${stackType}-app-storage"
+  AccessLogBucketArn:
+    Value: !GetAtt AccessLogBucket.Arn
+  AppStorageBucketArn:
+    Value: !GetAtt AppStorage.Arn
+

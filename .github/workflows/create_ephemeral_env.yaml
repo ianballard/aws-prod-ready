@@ -1,0 +1,61 @@
+name: Create Ephemeral Env CI/CD
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'stage name (ticket number, etc.)'
+        required: true
+        default: ''
+
+env:
+  PRIMARY_SAM_BUCKET: ${{ secrets.PRIMARY_SAM_BUCKET }}
+  SECONDARY_SAM_BUCKET: ${{ secrets.SECONDARY_SAM_BUCKET }}
+  STAGE: ${{ github.event.inputs.stage }}
+
+jobs:
+  Build-Deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install aws-sam-cli==1.87.0
+
+      - name: Build primary
+        run: |
+          sam build --config-file samconfig.ephemeral.primary.toml
+      - name: Deploy primary
+        run: |
+          echo "Deploying Ephemeral Stack: ${STAGE#*/}"
+          sam deploy --config-file samconfig.ephemeral.primary.toml \
+            --stack-name "app-backend-${STAGE#*/}" \
+            --s3-bucket "$PRIMARY_SAM_BUCKET" \
+            --s3-prefix "${STAGE#*/}" \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides stage="${STAGE#*/}" appId="t52x7zk6ls6p" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableDNS="false"
+
+      - name: Build secondary
+        run: |
+          sam build --config-file samconfig.ephemeral.secondary.toml
+      - name: Deploy secondary
+        run: |
+          echo "Deploying Ephemeral Stack: ${STAGE#*/}"
+          sam deploy --config-file samconfig.ephemeral.secondary.toml \
+            --stack-name "app-backend-secondary-${STAGE#*/}" \
+            --s3-bucket "$SECONDARY_SAM_BUCKET" \
+            --s3-prefix "${STAGE#*/}" \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides stage="${STAGE#*/}" appId="t52x7zk6ls6p" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableDNS="false"
+      
+      

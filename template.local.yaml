@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Local Stack
+
+Globals:
+  Api:
+    Auth:
+      DefaultAuthorizer: "PUBLIC"
+  Function:
+    MemorySize: 256
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+        "DB_TABLE": "DBTable-development"
+        "APP_ACCESS_LOGGER_FUNCTION_ARN": "arn:aws:lambda:us-east-2:051768043013:function:app-backend-NonVPCStack-FN5GL9JXC-AccessLogHandler-P0OmBNHdaNaP"
+    Layers:
+      - !Ref CoreLibraryLayer
+      - !Ref ApiLibraryLayer
+
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+
+Resources:
+
+  CoreLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: core-library-layer
+      Description: Core library for project.
+      ContentUri: shared_layers/core_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  ApiLibraryLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: api-library-layer
+      Description: Api library for project.
+      ContentUri: api/layers/api_layer
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+
+  SignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.signup
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/signup
+            Method: post
+
+  ConfirmSignUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.confirm_sign_up
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/confirm_sign_up
+            Method: get
+
+  AuthenticateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/auth/
+      Handler: auth_controller.authenticate
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonCognitoPowerUser
+        - AmazonSQSFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/auth
+            Method: post
+
+  QueryUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: api/user/
+      Handler: user_controller.query
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonSSMReadOnlyAccess
+        - AmazonSQSFullAccess
+        - AmazonDynamoDBFullAccess
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /v1.0/user
+            Method: get

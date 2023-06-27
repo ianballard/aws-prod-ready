@@ -1,0 +1,479 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Log Management Stack
+
+Parameters:
+  stage:
+    Description: "Stage"
+    Type: String
+  replicaRegion:
+    Description: "Replica Region"
+    Type: String
+  coreLayer:
+    Description: "Core Library Layer"
+    Type: String
+  securityGroup:
+    Description: "Lambda VPC security group"
+    Type: String
+    Default: ""
+  vpcSubnetIds:
+    Description: "Lambda VPC Subnets"
+    Type: CommaDelimitedList
+    Default: ""
+  enableVPC:
+    Description: "Is VPC enabled (true|false)"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  emailDistributionSubscription:
+    Description: "Email distribution of who gets notified of alerts"
+    Type: String
+  appId:
+    Description: "App ID used for unique s3 bucket names (no special characters, all lowercase)"
+    Type: String
+  stackType:
+    Description: "(primary|secondary)"
+    Type: String
+    AllowedValues:
+      - 'primary'
+      - 'secondary'
+    Default: 'primary'
+
+
+Conditions:
+  isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
+
+Globals:
+  Function:
+    MemorySize: 256
+    Timeout: 900
+    Runtime: python3.9
+    Tracing: Active
+    Environment:
+      Variables:
+        "stage": !Ref "stage"
+        "region": !Ref AWS::Region
+    Layers:
+      - !Ref coreLayer
+    VpcConfig: !If
+      - isVPCEnabled
+      - SecurityGroupIds:
+          - !Ref securityGroup
+        SubnetIds: !Ref vpcSubnetIds
+      - !Ref AWS::NoValue
+
+Resources:
+
+  AccessLogHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/log_management/app_logging
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSXRayDaemonWriteAccess
+      Handler: logger.log_event
+
+  CloudWatchLogsInvokeAccessLoggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt AccessLogHandler.Arn
+      Action: lambda:InvokeFunction
+      Principal: logs.amazonaws.com
+
+  ErrorLogHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./async/log_management/app_logging
+      Policies:
+        - AWSLambdaVPCAccessExecutionRole
+        - AWSXRayDaemonWriteAccess
+      Handler: logger.log_event
+
+  CloudWatchLogsInvokeErrorLoggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ErrorLogHandler.Arn
+      Action: lambda:InvokeFunction
+      Principal: logs.amazonaws.com
+
+  LogsKmsKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: KMS key for logs encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow Logs Service to Use the Key
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: '*'
+
+  NewLogGroupCreatedHandler:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: async/log_management/log_group_management
+      Handler: process_new_log_group.handle_new_log_group_created
+      Environment:
+        Variables:
+          "APP_ACCESS_LOGGER_FUNCTION_ARN": !GetAtt AccessLogHandler.Arn
+          "APP_ERROR_LOGGER_FUNCTION_ARN": !GetAtt ErrorLogHandler.Arn
+          "LOGS_KMS_KEY_ARN": !GetAtt LogsKmsKey.Arn
+      Role: !GetAtt NewLogGroupCreatedHandlerRole.Arn
+
+  NewLogGroupCreatedHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: NewLogGroupCreatedHandlerRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:PutSubscriptionFilter'
+                  - 'logs:PutRetentionPolicy'
+                  - 'logs:AssociateKmsKey'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  LogGroupCreationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Trigger Lambda function when a new CloudWatch log group is created
+      EventPattern:
+        source:
+          - aws.logs
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - logs.amazonaws.com
+          eventName:
+            - CreateLogGroup
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt NewLogGroupCreatedHandler.Arn
+          Id: LogGroupLambdaFunctionTarget
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt NewLogGroupCreatedHandler.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LogGroupCreationEventRule.Arn
+
+  LogBackupBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        LogFilePrefix: 'log-backups/'
+
+  LogBackupBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref LogBackupBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudWatchLogsToPutObject
+            Effect: Allow
+            Principal:
+              Service: 'logs.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${LogBackupBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: AllowCloudWatchLogsGetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: 'logs.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${LogBackupBucket}'
+
+  ExportLogGroupJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: async/log_management/log_group_management
+      Handler: export_log_group.create_export
+      Environment:
+        Variables:
+          "LOG_BACKUP_BUCKET": !Ref LogBackupBucket
+      Role: !GetAtt ExportLogGroupJobRole.Arn
+      Events:
+        AppAccessLogExport:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 * * ? *)
+            Description: Export App Access Logs
+            Enabled: True
+            Input: !Sub
+            - '{"function_log_group_arn": "${AccessLogHandlerArn}", "days_to_include": 1}'
+            - AccessLogHandlerArn: !GetAtt AccessLogHandler.Arn
+
+  ExportLogGroupJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: NewLogGroupCreatedHandlerRoleCustomPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateExportTask'
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+
+  AppErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Trigger an alarm if the number of app errors exceeds the threshold"
+      Namespace: "AWS/Lambda"
+      MetricName: "AppErrors"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ErrorLogHandler
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 2
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  MetricAlarmSNSAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Metric Alarm SNS Alerts Topic"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref emailDistributionSubscription
+
+  LambdaInvocationsAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Stat: Average
+
+  LambdaInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda invocations
+      AlarmName: LambdaInvocationsAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m1, 2)
+          Id: ad1
+        - Id: m1
+          MetricStat:
+            Metric:
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+            Period: !!int 900
+            Stat: Average
+      ThresholdMetricId: ad1
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  LambdaDurationAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Stat: Average
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda duration
+      AlarmName: LambdaDurationAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m2, 2)
+          Id: ad2
+        - Id: m2
+          MetricStat:
+            Metric:
+              MetricName: Duration
+              Namespace: AWS/Lambda
+            Period: !!int 3600
+            Stat: Average
+      ThresholdMetricId: ad2
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Lambda error"
+      Namespace: "AWS/Lambda"
+      MetricName: "Errors"
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 2
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Lambda throttles"
+      Namespace: "AWS/Lambda"
+      MetricName: "Throttles"
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  DynamoDBReadAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: ConsumedReadCapacityUnits
+      Namespace: AWS/DynamoDB
+      Stat: Average
+
+  DynamoDBReadAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Read
+      AlarmName: DynamoDBReadAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m3, 2)
+          Id: ad3
+        - Id: m3
+          MetricStat:
+            Metric:
+              MetricName: ConsumedReadCapacityUnits
+              Namespace: AWS/DynamoDB
+            Period: !!int 900
+            Stat: Average
+      ThresholdMetricId: ad3
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  DynamoDBWriteAnomalyDetector:
+    Type: AWS::CloudWatch::AnomalyDetector
+    Properties:
+      MetricName: ConsumedWriteCapacityUnits
+      Namespace: AWS/DynamoDB
+      Stat: Average
+
+  DynamoDBWriteAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Write
+      AlarmName: DynamoDBWriteAlarm
+      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
+      EvaluationPeriods: 1
+      Metrics:
+        - Expression: ANOMALY_DETECTION_BAND(m4, 2)
+          Id: ad4
+        - Id: m4
+          MetricStat:
+            Metric:
+              MetricName: ConsumedWriteCapacityUnits
+              Namespace: AWS/DynamoDB
+            Period: !!int 900
+            Stat: Average
+      ThresholdMetricId: ad4
+      AlarmActions:
+        - Ref: MetricAlarmSNSAlertsTopic
+
+  DynamoDBReadThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Read Throttle
+      Namespace: AWS/DynamoDB
+      MetricName: ReadThrottleEvents
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic
+
+  DynamoDBWriteThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DynamoDB Write Throttle
+      Namespace: AWS/DynamoDB
+      MetricName: WriteThrottleEvents
+      Statistic: "Sum"
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref MetricAlarmSNSAlertsTopic

@@ -1,0 +1,8 @@
+PyJWT==2.6.0
+requests==2.31.0
+cryptography==41.0.1
+opensearch-py==2.2.0
+requests-aws4auth==1.2.2
+aws-xray-sdk==0.96
+jsonschema==4.17.3
+urllib3<2
