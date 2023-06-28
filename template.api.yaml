@@ -169,7 +169,7 @@ Resources:
         Comment: 'CloudFront Distribution for S3 bucket'
         DefaultRootObject: 'index.html'
         Origins:
-          - DomainName: !GetAtt ApiDefinitionStorage.DomainName
+          - DomainName: !GetAtt ApiDefinitionStorage.RegionalDomainName
             Id: S3Origin
             S3OriginConfig:
               OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
