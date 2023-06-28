@@ -93,7 +93,7 @@ Resources:
                 Action:
                   - "s3:PutObject"
                   - "s3:GetBucketAcl"
-                  - "s3:HeadBucket"
+                  - "s3:ListBucket"
                 Resource:
                   - !Sub "arn:aws:s3:::${ConfigBucket}"
                   - !Sub "arn:aws:s3:::${ConfigBucket}/*"
@@ -169,6 +169,12 @@ Resources:
             Condition:
               StringEquals:
                 "s3:x-amz-acl": "bucket-owner-full-control"
+          - Sid: "AWSConfigBucketHeadBucket"
+            Effect: "Allow"
+            Principal:
+              Service: "config.amazonaws.com"
+            Action: "s3:ListBucket"
+            Resource: !Sub "arn:aws:s3:::${ConfigBucket}"
 
   CloudTrailBucket:
     Type: 'AWS::S3::Bucket'
