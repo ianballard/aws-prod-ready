@@ -88,6 +88,14 @@ Resources:
                 Action:
                   - 'es:ESHttpPost'
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                  - 'dynamodb:GetRecords'
+                  - 'dynamodb:GetShardIterator'
+                  - 'dynamodb:DescribeStream'
+                  - 'dynamodb:ListStreams'
+                Resource: '*'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
         - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
@@ -121,6 +129,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - 'dynamodb:DescribeTable'
+                  - 'dynamodb:GetRecords'
+                  - 'dynamodb:GetShardIterator'
+                  - 'dynamodb:DescribeStream'
+                  - 'dynamodb:ListStreams'
                 Resource: '*'
               - Effect: Allow
                 Action:
