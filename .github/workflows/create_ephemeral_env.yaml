@@ -40,7 +40,6 @@ jobs:
           echo "Deploying Ephemeral Stack: ${STAGE#*/}"
           sam deploy --config-file samconfig.ephemeral.primary.toml \
             --stack-name "app-backend-${STAGE#*/}" \
-            --s3-bucket "$PRIMARY_SAM_BUCKET" \
             --s3-prefix "${STAGE#*/}" \
             --no-fail-on-empty-changeset \
             --parameter-overrides stage="${STAGE#*/}" appId="t52x7zk6ls6p" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableDNS="false"
@@ -53,7 +52,6 @@ jobs:
           echo "Deploying Ephemeral Stack: ${STAGE#*/}"
           sam deploy --config-file samconfig.ephemeral.secondary.toml \
             --stack-name "app-backend-secondary-${STAGE#*/}" \
-            --s3-bucket "$SECONDARY_SAM_BUCKET" \
             --s3-prefix "${STAGE#*/}" \
             --no-fail-on-empty-changeset \
             --parameter-overrides stage="${STAGE#*/}" appId="t52x7zk6ls6p" replicaRegion="us-west-2" enablePersistentStorage="false" enableSecurity="false" enableBackup="false" enableVPC="false" enableDNS="false"

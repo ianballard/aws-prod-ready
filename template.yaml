@@ -120,6 +120,8 @@ Conditions:
   isSecondaryAndBackupEnabled: !And
     - !Condition isSecondary
     - !Condition isBackupEnabled
+  isEmailDistributionConfigured: !Not [!Equals [!Ref emailDistributionSubscription, '']]
+
 
 Resources:
 
@@ -247,6 +249,7 @@ Resources:
 
   DBEventStack:
     Type: "AWS::CloudFormation::Stack"
+    Condition: isPersistentStorageEnabled
     Properties:
       TemplateURL: template.event.db.yaml
       Parameters:
@@ -277,6 +280,7 @@ Resources:
       TemplateURL: template.api.yaml
       Parameters:
         stage: !Ref stage
+        enablePersistentStorage: !Ref enablePersistentStorage
         replicaRegion: !Ref replicaRegion
         coreLayer: !Ref CoreLibraryLayer
         apiLayer: !Ref ApiLibraryLayer
@@ -295,6 +299,7 @@ Resources:
 
   CloudFormationChangesSNSAlertsTopic:
     Type: AWS::SNS::Topic
+    Condition: isEmailDistributionConfigured
     Properties:
       DisplayName: "CloudFormation Stack Changes SNS Alerts Topic"
       Subscription:
