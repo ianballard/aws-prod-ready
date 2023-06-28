@@ -101,11 +101,19 @@ Parameters:
     Description: "Email distribution of who gets notified of alerts"
     Type: String
     Default: ''
+  enablePersistentStorage:
+    Description: "Enable Persistent Storage (true|false) true for long lived environments (dev, release, prod) and false for ephemeral environments"
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
   isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
   isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
+  isStackEphemeral: !Equals [ !Ref enablePersistentStorage, 'false' ]
 
 Resources:
 
@@ -121,7 +129,7 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
-        DestinationBucketName: !Sub "${appId}-${stage}-${stackType}-access-log-bucket"
+        DestinationBucketName: !If [ isStackEphemeral, !Sub "${appId}-development-${stackType}-access-log-bucket", !Sub "${appId}-${stage}-${stackType}-access-log-bucket" ]
         LogFilePrefix: 'api-definition-access-logs/'
       CorsConfiguration:
         CorsRules:
