@@ -28,7 +28,7 @@ The full list of configurations for this project and their descriptions are as f
 
 - `stage`: The environment stage (e.g., dev, staging, prod, or test-1, test-2, etc. for ephemeral environments).
 - `replicaRegion`: The secondary AWS region where replicas and backups will be stored.
-- `appId`: A unique identifier used for creating S3 bucket names. It should not contain any special characters and should be in all lowercase.
+- `appId`: A unique identifier used for creating S3 bucket names. It should not contain any special characters and should be in all lowercase. NOTE: You will also want to set this in your GitHub secrets as APP_ID for GitHub actions.
 - `dbTableName`: The name of the DynamoDB table. Defaults to "DBTable" if not specified.
 - `stackType`: Determines whether the stack is a primary or secondary (replica) region. The allowed values are 'primary' and 'secondary'. Defaults to 'primary' if not specified.
 - `enablePersistentStorage`: Enables or disables persistent storage. Set to 'true' for long-lived environments such as dev, release, and prod, and 'false' for ephemeral environments. Defaults to 'true' if not specified.
