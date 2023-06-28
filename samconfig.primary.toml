@@ -7,7 +7,7 @@ s3_prefix = "app-backend"
 region = "us-east-2"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 image_repositories = []
-parameter_overrides = "stage=\"development\" replicaRegion=\"us-west-2\" appId=\"t52x7zk6ls6p\" dbTableName=\"DBTable\" stackType=\"primary\" enablePersistentStorage=\"true\" enableVPC=\"true\" enableOpenSearch=\"true\" enableS3Replication=\"false\" enableAWSAuth=\"true\" enableBackup=\"true\" enableSecurity=\"true\" corsAllowedOrigins=\"*\" emailDistributionSubscription=\"ianballard.dev@gmail.com\" hostedZoneName=\"ianballard.net\" enableDNS=\"true\" hostedZoneId=\"Z05462233VILWAA1DI0O6\""
+parameter_overrides = "stage=\"development\" replicaRegion=\"us-west-2\" appId=\"<APP_ID>\" dbTableName=\"DBTable\" stackType=\"primary\" enablePersistentStorage=\"true\" enableVPC=\"<ENABLE_VPC>\" enableOpenSearch=\"<ENABLE_OPEN_SEARCH>\" enableS3Replication=\"false\" enableAWSAuth=\"true\" enableBackup=\"<ENABLE_BACKUP>\" enableSecurity=\"<ENABLE_SECURITY>\" corsAllowedOrigins=\"<ALLOWED_ORIGINS>\" emailDistributionSubscription=\"<EMAIL_DISTRIBUTION>\" hostedZoneName=\"<HOSTED_ZONE_NAME>\" enableDNS=\"<ENABLE_DNS>\" hostedZoneId=\"<HOSTED_ZONE_ID>\""
 resolve_s3 = true
 disable_rollback = false
 confirm_changeset = false
