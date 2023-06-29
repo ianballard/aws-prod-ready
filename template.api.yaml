@@ -65,8 +65,8 @@ Parameters:
     Description: "CORS ALLOWED ORIGINS (response header: Access-Control-Allow-Origin)"
     Type: String
     Default: ''
-  enableOpenSearch:
-    Description: "Enable Open Search (true|false)"
+  enableSearchApi:
+    Description: "Enable Search API (true|false). Should only ever be true if enableOpenSearch is set to true."
     Type: String
     AllowedValues:
       - 'true'
@@ -111,7 +111,7 @@ Parameters:
 
 Conditions:
   isVPCEnabled: !Equals [ !Ref enableVPC, 'true' ]
-  isOpenSearchEnabled: !Equals [ !Ref enableOpenSearch, 'true' ]
+  isSearchAPIEnabled: !Equals [ !Ref enableSearchApi, 'true' ]
   isDNSEnabled: !Equals [ !Ref enableDNS, 'true' ]
   isStackEphemeral: !Equals [ !Ref enablePersistentStorage, 'false' ]
 
@@ -340,7 +340,7 @@ Resources:
       ApiUrl: !If [ isDNSEnabled, !Sub "https://api-user-${stage}.${hostedZoneName}",  !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
 
   SearchApiStack:
-    Condition: isOpenSearchEnabled
+    Condition: isSearchAPIEnabled
     Type: "AWS::CloudFormation::Stack"
     Properties:
       TemplateURL: template.api.search.yaml
@@ -360,14 +360,14 @@ Resources:
         emailDistributionSubscription: !Ref emailDistributionSubscription
 
   SearchWebACLAssociation:
-    Condition: isOpenSearchEnabled
+    Condition: isSearchAPIEnabled
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
       WebACLArn: !GetAtt WebACLWithAMR.Arn
       ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${SearchApiStack.Outputs.ApiId}/stages/Prod
 
   ExecuteManageSearchApiExportsFunction:
-    Condition: isOpenSearchEnabled
+    Condition: isSearchAPIEnabled
     Type: Custom::ExecuteManageSearchApiExportsFunction
     Properties:
       ServiceToken: !GetAtt ManageApiExportsFunction.Arn
@@ -384,7 +384,7 @@ Outputs:
     Description: "User API"
     Value: !If [ isDNSEnabled, !Sub "https://api-user-${stage}.${hostedZoneName}",  !GetAtt UserApiStack.Outputs.ApiGatewayUrl ]
   SearchApiUrl:
-    Condition: isOpenSearchEnabled
+    Condition: isSearchAPIEnabled
     Description: "Search API"
     Value: !If [ isDNSEnabled, !Sub "https://api-search-${stage}.${hostedZoneName}",  !GetAtt SearchApiStack.Outputs.ApiGatewayUrl ]
   ApiDefinitionStorageCDN:

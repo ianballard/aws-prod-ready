@@ -46,6 +46,13 @@ Parameters:
       - 'true'
       - 'false'
     Default: 'false'
+  enableSearchApi:
+    Description: "Enable Search API (true|false). Should only ever be true if enableOpenSearch is set to true."
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
   enableS3Replication:
     Description: "Is s3 replication enabled (true|false) NOTE: buckets must exist"
     Type: String
@@ -289,7 +296,7 @@ Resources:
         enableVPC: !Ref enableVPC
         dbTableName: !Ref dbTableName
         corsAllowedOrigins: !Ref corsAllowedOrigins
-        enableOpenSearch: !Ref enableOpenSearch
+        enableSearchApi: !Ref enableSearchApi
         stackType: !Ref stackType
         appId: !Ref appId
         enableDNS: !Ref enableDNS
