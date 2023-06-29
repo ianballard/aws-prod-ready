@@ -34,6 +34,7 @@ The full list of configurations for this project and their descriptions are as f
 - `enablePersistentStorage`: Enables or disables persistent storage. Set to 'true' for long-lived environments such as dev, release, and prod, and 'false' for ephemeral environments. Defaults to 'true' if not specified.
 - `enableVPC`: Enables or disables the use of a Virtual Private Cloud (VPC). The allowed values are 'true', 'false', and 'null'. Defaults to 'false' if not specified.
 - `enableOpenSearch`: Enables or disables the use of AWS OpenSearch Service. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
+- `enableSearchApi`: Enables or disables the Search API. This allows a stack to have the Search API to be deployed and re-use the existing search cluster. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified. This should only ever be true if enableOpenSearch is enabled in the long-lived stack. Useful for ephemerals.
 - `enableS3Replication`: Enables or disables Amazon S3 bucket replication. Please note that buckets must exist (deploy stacks once with this disabled before enabling). The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
 - `enableAWSAuth`: Enables or disables AWS authentication using Amazon Cognito. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
 - `enableBackup`: Enables or disables AWS Backup for creating and managing backups. The allowed values are 'true' and 'false'. Defaults to 'true' if not specified.
@@ -290,13 +291,16 @@ The first command will build the source of your application. The second command 
 * **Parameter enablePersistentStorage**: Enable persistent storage (true or false).
 * **Parameter enableVPC**: Enable VPC support (true or false).
 * **Parameter enableOpenSearch**: Enable OpenSearch support (true or false).
+* **Parameter enableSearchApi**: Enable Search API (true or false). Only set to true if enableOpenSearch is set to true in the long-lived stack.
 * **Parameter enableS3Replication**: Enable S3 replication (true or false). **NOTE:** This NEEDS to be false for a first time deploy, otherwise the stack will fail due to the destination bucket not yet existing in the replica region. 
 * **Parameter enableAWSAuth**: Enable AWS authentication with Amazon Cognito (true or false).
 * **Parameter enableBackup**: Enable AWS Backup support (true or false).
 * **Parameter enableSecurity**: Enable security features (true or false).
-* **Parameter enableApiCDN**: Enable API Gateway CloudFront distribution (true or false).
 * **Parameter corsAllowedOrigins**: Allowed CORS origins for your API (e.g., * for all origins, or a specific domain).
 * **Parameter emailDistributionSubscription**: Email address for receiving alerts and notifications (e.g., your-email@gmail.com).
+* **Parameter enableDNS**: Enables or disables the use of AWS Route53 DNS. The allowed values are 'true' and 'false'. Defaults to 'false' if not specified.
+* **Parameter hostedZoneName**: Specifies the DNS Hosted Zone. Defaults to empty if not specified.
+* **Parameter hostedZoneId**: Specifies the DNS Hosted Id. Defaults to empty if not specified.
 
 During the guided deployment process, you will be prompted to enter values for each of these parameters. After entering the required information, you can confirm the changes and proceed with the deployment.
 
